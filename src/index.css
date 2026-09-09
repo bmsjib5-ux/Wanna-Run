@@ -97,7 +97,17 @@ body {
     radial-gradient(1000px 520px at 50% -10%, var(--glow) 0%, transparent 70%),
     var(--bg);
   overscroll-behavior-y: none;
+  /* กันแตะสองครั้งเพื่อซูม และกันลากคลุม/ก็อปปี้ข้อความในหน้าแอป (ยกเว้นช่องกรอก) */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+img { -webkit-user-drag: none; pointer-events: auto; }
 
 /* รูปพื้นหลังจากเครื่องผู้ใช้: วางเป็นชั้น fixed ด้านหลัง (background-attachment: fixed ใช้บน iOS ไม่ได้)
    แล้วทาสีพื้นทับด้วยความทึบตามระดับที่เลือก เพื่อให้ตัวหนังสือยังอ่านออก */
