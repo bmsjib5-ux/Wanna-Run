@@ -172,27 +172,33 @@ export function StoreProvider({
   /** ดึงข้อมูลฝั่งเซิร์ฟเวอร์มาทับส่วนที่เป็นข้อมูลร่วม (โปรไฟล์ เพื่อน กลุ่ม นัดวิ่ง) */
   const refresh = useCallback(async () => {
     if (!cloudRef.current) return
-    try {
-      const local = stateRef.current.profile
-      const [profile, friends, groups, invites] = await Promise.all([
-        api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
-        api.fetchFriends(),
-        api.fetchGroups(),
-        api.fetchInvites(),
-      ])
-      setState((s) => ({
-        ...s,
-        onboarded: !!profile,
-        profile: profile ?? s.profile,
-        friends,
-        groups,
-        invites,
-      }))
-    } catch (err) {
-      console.error('ดึงข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ', err)
-    } finally {
-      setSyncing(false)
+    const local = stateRef.current.profile
+    // ใช้ allSettled เพื่อให้ส่วนที่ดึงสำเร็จยังแสดงได้ แม้บางส่วนจะพลาด
+    const [profileR, friendsR, groupsR, invitesR] = await Promise.allSettled([
+      api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
+      api.fetchFriends(),
+      api.fetchGroups(),
+      api.fetchInvites(),
+    ])
+
+    for (const [what, result] of [
+      ['โปรไฟล์', profileR],
+      ['เพื่อน', friendsR],
+      ['กลุ่ม', groupsR],
+      ['นัดวิ่ง', invitesR],
+    ] as const) {
+      if (result.status === 'rejected') console.error(`ดึงข้อมูล${what}ไม่สำเร็จ`, result.reason)
     }
+
+    setState((s) => ({
+      ...s,
+      onboarded: profileR.status === 'fulfilled' ? !!profileR.value : s.onboarded,
+      profile: profileR.status === 'fulfilled' && profileR.value ? profileR.value : s.profile,
+      friends: friendsR.status === 'fulfilled' ? friendsR.value : s.friends,
+      groups: groupsR.status === 'fulfilled' ? groupsR.value : s.groups,
+      invites: invitesR.status === 'fulfilled' ? invitesR.value : s.invites,
+    }))
+    setSyncing(false)
   }, [])
 
   // โหลดข้อมูลครั้งแรกและติดตามการเปลี่ยนแปลงแบบสด
@@ -205,7 +211,22 @@ export function StoreProvider({
     setState(load(userId))
     void refresh()
     const unsubscribe = api.subscribeToChanges(() => void refresh())
-    return unsubscribe
+
+    // Realtime ผ่าน websocket อาจต่อไม่ได้ (เน็ตองค์กร พร็อกซี มือถือสลับสัญญาณ)
+    // จึงถามซ้ำเป็นระยะและตอนกลับมาโฟกัสหน้าจอ เพื่อไม่ให้ข้อมูลค้างเมื่อ websocket หลุด
+    const timer = window.setInterval(() => void refresh(), 30_000)
+    const onWake = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onWake)
+    window.addEventListener('focus', onWake)
+
+    return () => {
+      unsubscribe()
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onWake)
+      window.removeEventListener('focus', onWake)
+    }
   }, [cloud, userId, refresh])
 
   // ตรวจข้ามวัน/ข้ามสัปดาห์เพื่อรีเซ็ตภารกิจ
