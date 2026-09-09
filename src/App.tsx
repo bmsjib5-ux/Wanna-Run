@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StoreProvider, useStore } from './state/store'
+import { RunProvider, useRun } from './state/run'
+import { formatDuration, formatKm } from './lib/geo'
 import { AuthProvider, useAuth } from './state/auth'
 import { isCloudConfigured } from './lib/supabase'
 import { takeCodeFromUrl } from './lib/friendLink'
@@ -40,6 +42,7 @@ const TABS: Array<{ key: Route; label: string; icon: string }> = [
 
 function Shell() {
   const { state, syncing } = useStore()
+  const { tracker } = useRun()
   const [route, setRoute] = useState<Route>('home')
   const [params, setParams] = useState<Record<string, string>>({})
 
@@ -77,6 +80,15 @@ function Shell() {
 
   return (
     <div className="shell">
+      {tracker.running && route !== 'run' && (
+        <button className={`run-banner${tracker.paused ? ' paused' : ''}`} onClick={() => nav('run')}>
+          <span className="dot" />
+          <span className="grow">
+            {tracker.paused ? 'พักการวิ่งอยู่' : 'กำลังวิ่ง'} · {formatKm(tracker.distanceM)} กม. · {formatDuration(tracker.elapsedMs)}
+          </span>
+          <span>กลับไปหน้าวิ่ง ›</span>
+        </button>
+      )}
       <main className="page">
         {route === 'home' && <Home nav={nav} />}
         {route === 'friends' && <Friends nav={nav} addCode={params.add} />}
@@ -118,8 +130,8 @@ function Shell() {
       <nav className="nav">
         {TABS.map((t) =>
           t.key === 'run' ? (
-            <button key={t.key} onClick={() => nav('run')} aria-label="เริ่มวิ่ง">
-              <span className="fab">🏃</span>
+            <button key={t.key} onClick={() => nav('run')} aria-label={tracker.running ? 'กลับไปหน้าวิ่ง' : 'เริ่มวิ่ง'}>
+              <span className={`fab${tracker.running ? ' live' : ''}`}>🏃</span>
             </button>
           ) : (
             <button
@@ -160,7 +172,9 @@ function CloudApp() {
 
   return (
     <StoreProvider userId={session.user.id}>
-      <Shell />
+      <RunProvider>
+        <Shell />
+      </RunProvider>
     </StoreProvider>
   )
 }
@@ -170,7 +184,9 @@ export default function App() {
   if (!isCloudConfigured) {
     return (
       <StoreProvider>
-        <Shell />
+        <RunProvider>
+          <Shell />
+        </RunProvider>
       </StoreProvider>
     )
   }

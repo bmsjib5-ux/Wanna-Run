@@ -1,57 +1,34 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import { useStore } from '../state/store'
-import { useCurrentPosition, useRunTracker } from '../lib/useGeo'
+import { useCurrentPosition } from '../lib/useGeo'
+import { useRun } from '../state/run'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { uid } from '../lib/id'
-import { notificationPermission, requestNotificationPermission, vibrate } from '../lib/notify'
-import { useWakeLock } from '../lib/wakeLock'
-import { closeRunNotification, showRunNotification } from '../lib/runNotice'
+import { notificationPermission, requestNotificationPermission } from '../lib/notify'
 import type { RunSession } from '../types'
 
-export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: string }) {
+export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; inviteId?: string }) {
   const { state, actions } = useStore()
   const geo = useCurrentPosition(true)
-  const { tracker, start, pause, resume, stop, reset } = useRunTracker()
+  const { tracker, inviteId: activeInvite, wake, start, pause, resume, stop, reset } = useRun()
   const [summary, setSummary] = useState<RunSession | null>(null)
   const [askSim, setAskSim] = useState(false)
 
+  // ถ้ากำลังวิ่งอยู่ ใช้นัดที่ผูกไว้ตอนเริ่ม (กลับมาจากหน้าอื่นจะไม่มีพารามิเตอร์แล้ว)
+  const inviteId = tracker.running ? activeInvite : inviteParam
   const invite = inviteId ? state.invites.find((i) => i.id === inviteId) : undefined
 
-  const center = tracker.last ?? geo.fallback
+  const center = tracker.last ?? tracker.path[tracker.path.length - 1] ?? geo.fallback
   const fit = useMemo(() => (tracker.path.length > 3 ? boundsOf(tracker.path) : null), [tracker.path])
-
-  // เตือนเมื่อครบทุก 1 กิโลเมตร
-  const km = Math.floor(tracker.distanceM / 1000)
-  useEffect(() => {
-    if (tracker.running && km > 0) vibrate([60, 40, 60])
-  }, [km, tracker.running])
-
-  // กันจอดับระหว่างวิ่ง ไม่งั้น GPS หยุดตามจอ
-  const wake = useWakeLock(tracker.running)
-
-  // แจ้งเตือนค้างบนแถบสถานะ (Android) อัปเดตทุก 30 วิ, ทุกกิโล และตอนพัก/ไปต่อ
-  const notifyOn = tracker.running && notificationPermission() === 'granted'
-  const latest = useRef({ distanceM: 0, elapsedMs: 0, paused: false })
-  latest.current = { distanceM: tracker.distanceM, elapsedMs: tracker.elapsedMs, paused: tracker.paused }
-  const halfMinute = Math.floor(tracker.elapsedMs / 30_000)
-  useEffect(() => {
-    if (!notifyOn) {
-      void closeRunNotification()
-      return
-    }
-    const { distanceM, elapsedMs, paused } = latest.current
-    void showRunNotification(distanceM, elapsedMs, paused)
-  }, [notifyOn, tracker.paused, km, halfMinute])
-  useEffect(() => () => void closeRunNotification(), [])
 
   /** ขอสิทธิ์แจ้งเตือนตอนกดเริ่ม (ต้องมาจากการแตะของผู้ใช้) แล้วค่อยเริ่มจับ */
   const begin = (simulated: boolean) => {
     if (notificationPermission() === 'default') void requestNotificationPermission()
-    start(simulated, geo.position ?? undefined)
+    start(simulated, geo.position ?? undefined, inviteParam)
   }
 
   // ระยะต่ำกว่านี้ถือว่ายังไม่ได้วิ่ง (GPS ยังไม่นิ่ง หรือกดจบเร็วไป) จะแสดงเหตุผลแทนการบันทึก
@@ -82,7 +59,13 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
     <>
       <TopBar
         title={tracker.running ? (tracker.paused ? 'พักอยู่' : 'กำลังวิ่ง') : 'จับระยะทาง'}
-        subtitle={invite ? `นัด: ${invite.title} · ${invite.place.name}` : 'GPS จะเริ่มบันทึกเมื่อกดเริ่ม'}
+        subtitle={
+          invite
+            ? `นัด: ${invite.title} · ${invite.place.name}`
+            : tracker.running
+              ? 'ไปหน้าอื่นได้ การวิ่งจะยังนับต่อ'
+              : 'GPS จะเริ่มบันทึกเมื่อกดเริ่ม'
+        }
         onBack={tracker.running ? undefined : () => nav('home')}
       />
 

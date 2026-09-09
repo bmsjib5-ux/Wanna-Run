@@ -135,6 +135,21 @@ img { -webkit-user-drag: none; pointer-events: auto; }
 :root[data-bg] .card { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 :root[data-bg] .section-title, :root[data-bg] .topbar h1, :root[data-bg] .topbar .sub { text-shadow: 0 1px 8px rgba(0, 0, 0, .55); }
 
+/* แถบบอกว่ากำลังวิ่งอยู่ แสดงบนทุกหน้าที่ไม่ใช่หน้าวิ่ง */
+.run-banner {
+  position: sticky; top: 8px; z-index: 30;
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  margin: 8px 0 4px; padding: 10px 14px; border-radius: 14px;
+  background: rgba(var(--accent-rgb), .16); border: 1px solid rgba(var(--accent-rgb), .45);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  color: var(--text); font-weight: 700; font-size: 13.5px; text-align: left;
+}
+.run-banner .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px rgba(88,224,138,.8); animation: live 1.4s ease-in-out infinite; flex: none; }
+.run-banner.paused .dot { background: var(--warn); box-shadow: none; animation: none; }
+.run-banner > span:last-child { color: var(--accent-text); font-size: 12.5px; white-space: nowrap; }
+.fab.live { animation: fabpulse 1.6s ease-in-out infinite; }
+@keyframes fabpulse { 0%, 100% { box-shadow: 0 6px 18px rgba(var(--accent-rgb), .45); } 50% { box-shadow: 0 6px 26px rgba(var(--accent-rgb), .9); } }
+
 .spot.active { border-color: rgba(var(--accent-rgb), .5); }
 .spot-main { width: 100%; text-align: left; padding: 0; }
 
