@@ -66,5 +66,6 @@ export function initialState(): AppState {
     highScores: { tapsprint: 0, spin: 0, quiz: 0 },
     lastSpinAt: 0,
     places: PLACES,
+    spots: [],
   }
 }

@@ -157,4 +157,6 @@ export type AppState = {
   highScores: Record<GameKey, number>
   lastSpinAt: number
   places: Place[]
+  /** จุดวิ่งประจำที่ผู้ใช้บันทึกไว้ */
+  spots: Place[]
 }

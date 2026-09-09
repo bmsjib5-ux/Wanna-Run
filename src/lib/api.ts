@@ -13,7 +13,7 @@ import { squareThumbnail } from './image'
 import { setServerTime } from './presence'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
-function newId(): string {
+export function newId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   bytes[6] = (bytes[6] & 0x0f) | 0x40
@@ -548,6 +548,34 @@ export function heartbeatOnly(row: ChangeRow, friend: Friend): Pick<Friend, 'las
     lastActiveAt: new Date(row.last_active_at).getTime(),
     online: typeof row.is_online === 'boolean' ? row.is_online : undefined,
   }
+}
+
+// ---------- จุดวิ่งประจำ ----------
+
+type SpotRow = { id: string; name: string; area: string; lat: number; lng: number; created_at: string }
+
+export async function fetchSpots(): Promise<Place[]> {
+  const { data, error } = await requireSupabase()
+    .from('spots')
+    .select('id,name,area,lat,lng,created_at')
+    .order('created_at', { ascending: false })
+  // ยังไม่ได้รัน spots.sql (42P01) → โยนต่อไป ให้ refresh เก็บรายการในเครื่องไว้ตามเดิม
+  if (error) throw error
+  return ((data ?? []) as SpotRow[]).map((r) => ({ id: r.id, name: r.name, area: r.area ?? '', lat: r.lat, lng: r.lng, tags: ['จุดประจำ'] }))
+}
+
+export async function createSpotRemote(spot: Place): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+  const { error } = await requireSupabase()
+    .from('spots')
+    .insert({ id: spot.id, owner: uid, name: spot.name, area: spot.area, lat: spot.lat, lng: spot.lng })
+  if (error) throw error
+}
+
+export async function deleteSpotRemote(spotId: ID): Promise<void> {
+  const { error } = await requireSupabase().from('spots').delete().eq('id', spotId)
+  if (error) throw error
 }
 
 // ---------- รูปโปรไฟล์ ----------

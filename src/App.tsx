@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from './state/store'
 import { AuthProvider, useAuth } from './state/auth'
 import { isCloudConfigured } from './lib/supabase'
 import { takeCodeFromUrl } from './lib/friendLink'
+import { takeSpotFromUrl } from './lib/spotLink'
 import Auth from './screens/Auth'
 import Toaster from './components/Toaster'
 import Onboarding from './screens/Onboarding'
@@ -51,7 +52,13 @@ function Shell() {
   // เปิดจากลิงก์ QR (?add=RUN-XXXX) ให้เด้งไปหน้าเพิ่มเพื่อนทันที
   useEffect(() => {
     const code = takeCodeFromUrl()
-    if (code) nav('friends', { add: code })
+    if (code) {
+      nav('friends', { add: code })
+      return
+    }
+    // ลิงก์จุดวิ่งที่เพื่อนส่งมา (?spot=lat,lng) เปิดแผนที่พร้อมปักหมุดให้
+    const spot = takeSpotFromUrl()
+    if (spot) nav('map', { lat: String(spot.lat), lng: String(spot.lng), name: spot.name, area: spot.area })
   }, [nav])
 
   // ปุ่มย้อนกลับของเบราว์เซอร์ให้กลับมาหน้าหลักแทนการออกจากแอป
@@ -93,7 +100,16 @@ function Shell() {
           />
         )}
         {route === 'run' && <RunScreen nav={nav} inviteId={params.inviteId} />}
-        {route === 'map' && <LiveMap nav={nav} />}
+        {route === 'map' && (
+          <LiveMap
+            nav={nav}
+            initialPin={
+              params.lat && params.lng
+                ? { id: 'from-link', name: params.name || 'จุดที่ปักหมุด', area: params.area || '', lat: Number(params.lat), lng: Number(params.lng), tags: [] }
+                : undefined
+            }
+          />
+        )}
         {route === 'games' && <Games nav={nav} tab={params.tab} />}
         {route === 'profile' && <Profile nav={nav} />}
         {route === 'notifications' && <Notifications nav={nav} />}

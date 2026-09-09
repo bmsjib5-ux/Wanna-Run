@@ -50,6 +50,7 @@ function load(userId: string | null): AppState {
     const rolled = rollover(parsed.counters ?? emptyCounters())
     return {
       ...withCounters(parsed),
+      spots: parsed.spots ?? [],
       counters: rolled ?? parsed.counters,
       missions: rolled
         ? parsed.missions.map((m) => ({ ...m, claimed: m.period === 'season' ? m.claimed : false }))
@@ -119,6 +120,10 @@ type Actions = {
 
   toggleShareLocation: (on: boolean) => void
 
+  /** บันทึกจุดวิ่งประจำ (ตั้งชื่อใหม่ได้) คืน id ของจุดที่บันทึก */
+  addSpot: (place: Place, name?: string) => ID
+  removeSpot: (spotId: ID) => void
+
   claimMission: (missionId: ID) => void
   recordGame: (game: GameKey, score: number, coins: number, xp: number) => void
   markSpun: () => void
@@ -177,11 +182,12 @@ export function StoreProvider({
     if (!cloudRef.current) return
     const local = stateRef.current.profile
     // ใช้ allSettled เพื่อให้ส่วนที่ดึงสำเร็จยังแสดงได้ แม้บางส่วนจะพลาด
-    const [profileR, friendsR, groupsR, invitesR] = await Promise.allSettled([
+    const [profileR, friendsR, groupsR, invitesR, spotsR] = await Promise.allSettled([
       api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
       api.fetchFriends(),
       api.fetchGroups(),
       api.fetchInvites(),
+      api.fetchSpots(),
     ])
 
     for (const [what, result] of [
@@ -189,6 +195,7 @@ export function StoreProvider({
       ['เพื่อน', friendsR],
       ['กลุ่ม', groupsR],
       ['นัดวิ่ง', invitesR],
+      ['จุดวิ่งประจำ', spotsR],
     ] as const) {
       if (result.status === 'rejected') console.error(`ดึงข้อมูล${what}ไม่สำเร็จ`, result.reason)
     }
@@ -200,6 +207,7 @@ export function StoreProvider({
       friends: friendsR.status === 'fulfilled' ? friendsR.value : s.friends,
       groups: groupsR.status === 'fulfilled' ? groupsR.value : s.groups,
       invites: invitesR.status === 'fulfilled' ? invitesR.value : s.invites,
+      spots: spotsR.status === 'fulfilled' ? spotsR.value : s.spots,
     }))
     setSyncing(false)
   }, [])
@@ -601,6 +609,23 @@ export function StoreProvider({
             goto: 'map',
           })
         }
+      },
+
+      addSpot: (place, name) => {
+        const spot: Place = {
+          ...place,
+          id: cloudRef.current ? api.newId() : uid('sp_'),
+          name: (name ?? place.name).trim() || place.name,
+          tags: ['จุดประจำ'],
+        }
+        patch((s) => ({ ...s, spots: [spot, ...s.spots.filter((x) => x.id !== spot.id)] }))
+        if (cloudRef.current) remote(() => api.createSpotRemote(spot))
+        return spot.id
+      },
+
+      removeSpot: (spotId) => {
+        patch((s) => ({ ...s, spots: s.spots.filter((x) => x.id !== spotId) }))
+        if (cloudRef.current) remote(() => api.deleteSpotRemote(spotId))
       },
 
       claimMission: (missionId) =>

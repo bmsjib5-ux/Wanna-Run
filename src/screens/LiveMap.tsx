@@ -7,6 +7,8 @@ import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
 import { isOnline, useNow } from '../lib/presence'
+import { spotShareText, spotLink } from '../lib/spotLink'
+import SpotList from '../components/SpotList'
 import { boundsOf, distanceM } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import { PLACES } from '../lib/seed'
@@ -16,14 +18,16 @@ import type { LatLng, Place } from '../types'
 import * as api from '../lib/api'
 import type { FriendPing } from '../lib/useGeo'
 
-export default function LiveMap({ nav }: { nav: Nav }) {
+export default function LiveMap({ nav, initialPin }: { nav: Nav; initialPin?: Place }) {
   const { state, actions, cloud } = useStore()
   const geo = useCurrentPosition(true)
   const [showPlaces, setShowPlaces] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
 
   // หมุดที่ผู้ใช้ปักเอง (แตะบนแผนที่ หรือเลือกจากผลค้นหา) มีได้ทีละหนึ่งจุด
-  const [pin, setPin] = useState<Place | null>(null)
+  const [pin, setPin] = useState<Place | null>(initialPin ?? null)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [saveName, setSaveName] = useState('')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
@@ -100,6 +104,26 @@ export default function LiveMap({ nav }: { nav: Nav }) {
 
   const me = geo.position
   const sharing = state.profile.sharingLocation
+
+  /** จุดประจำที่ตรงกับหมุดปัจจุบัน (ห่างกันไม่เกิน 30 ม. ถือว่าจุดเดียวกัน) */
+  const savedSpot = useMemo(
+    () => (pin ? state.spots.find((sp) => sp.id === pin.id || distanceM(sp, pin) < 30) : undefined),
+    [pin, state.spots],
+  )
+
+  const shareSpot = (place: Place) => {
+    const text = spotShareText(place, state.profile.name)
+    const url = spotLink(place)
+    const nav2 = navigator as Navigator & { share?: (d: ShareData) => Promise<void> }
+    if (nav2.share) {
+      nav2.share({ title: `ไปวิ่งที่ ${place.name} กันไหม?`, text, url }).catch(() => undefined)
+      return
+    }
+    navigator.clipboard
+      ?.writeText(text)
+      .then(() => pushNotice('คัดลอกแล้ว', `ส่งจุด "${place.name}" ให้เพื่อนในแชตได้เลย`))
+      .catch(() => pushNotice(place.name, url))
+  }
   const now = useNow()
 
   // ส่งตำแหน่งของเราขึ้นเซิร์ฟเวอร์ระหว่างที่เปิดแชร์อยู่
@@ -230,8 +254,40 @@ export default function LiveMap({ nav }: { nav: Nav }) {
               🧭 นำทาง
             </a>
           </div>
+          <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            {savedSpot ? (
+              <span className="chip on grow" style={{ justifyContent: 'center' }}>
+                ⭐ บันทึกเป็นจุดประจำแล้ว
+              </span>
+            ) : (
+              <button
+                className="btn sm grow"
+                onClick={() => {
+                  setSaveName(pin.name)
+                  setSaveOpen(true)
+                }}
+              >
+                ⭐ บันทึกเป็นจุดประจำ
+              </button>
+            )}
+            <button className="btn sm grow" onClick={() => shareSpot(pin)}>
+              📤 ส่งให้เพื่อน
+            </button>
+          </div>
         </div>
       )}
+
+      <SpotList
+        spots={state.spots}
+        activeId={savedSpot?.id}
+        onPick={(spot) => {
+          setPin(spot)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onInvite={(spot) => nav('invites', { new: '1', lat: String(spot.lat), lng: String(spot.lng), name: spot.name, area: spot.area })}
+        onShare={shareSpot}
+        onRemove={(spot) => actions.removeSpot(spot.id)}
+      />
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row">
@@ -315,6 +371,32 @@ export default function LiveMap({ nav }: { nav: Nav }) {
           ? 'ตำแหน่งจะถูกส่งขึ้นเซิร์ฟเวอร์เฉพาะตอนที่คุณเปิดแชร์ และเห็นได้เฉพาะเพื่อนในก๊วนเท่านั้น พอปิดแชร์ ตำแหน่งล่าสุดจะถูกลบทิ้งทันที'
           : 'ตำแหน่งของคุณอ่านจาก GPS ของเครื่องและไม่ถูกส่งออกนอกอุปกรณ์ ส่วนตำแหน่งเพื่อนในโหมดนี้เป็นข้อมูลตัวอย่างที่จำลองขึ้น'}
       </div>
+
+      <Sheet open={saveOpen} title="บันทึกจุดวิ่งประจำ" subtitle="ตั้งชื่อให้จำง่าย เช่น หน้าประตู 3 สวนลุม" onClose={() => setSaveOpen(false)}>
+        {pin && (
+          <>
+            <label className="field">
+              <span>ชื่อจุด</span>
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)} maxLength={50} autoFocus />
+            </label>
+            <div className="muted small" style={{ marginBottom: 14 }}>
+              📍 {pin.area || `${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}`}
+            </div>
+            <button
+              className="btn primary block"
+              onClick={() => {
+                const name = saveName.trim() || pin.name
+                actions.addSpot(pin, name)
+                setPin({ ...pin, name })
+                setSaveOpen(false)
+                pushNotice('บันทึกจุดประจำแล้ว', 'เลือกได้ตอนสร้างคำชวน หรือส่งให้เพื่อนได้เลย')
+              }}
+            >
+              ⭐ บันทึก
+            </button>
+          </>
+        )}
+      </Sheet>
 
       <Sheet open={shareOpen} title="ใครเห็นตำแหน่งคุณได้บ้าง" subtitle="ปิดรายคนได้ตามต้องการ" onClose={() => setShareOpen(false)}>
         <div className="stack-8">

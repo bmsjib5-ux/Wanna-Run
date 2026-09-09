@@ -125,6 +125,9 @@ body {
 :root[data-bg] .card { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 :root[data-bg] .section-title, :root[data-bg] .topbar h1, :root[data-bg] .topbar .sub { text-shadow: 0 1px 8px rgba(0, 0, 0, .55); }
 
+.spot.active { border-color: rgba(var(--accent-rgb), .5); }
+.spot-main { width: 100%; text-align: left; padding: 0; }
+
 .bg-preview {
   width: 64px; height: 64px; flex: none;
   border-radius: 14px; border: 1px solid var(--line);
