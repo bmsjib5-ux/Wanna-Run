@@ -51,9 +51,14 @@ export default function Profile({ nav }: { nav: Nav }) {
       />
 
       <div className="card center">
-        <div style={{ display: 'grid', placeItems: 'center' }}>
+        <button
+          onClick={() => setEditing(true)}
+          aria-label="แก้ไขข้อมูลส่วนตัว"
+          style={{ position: 'relative', display: 'inline-grid', placeItems: 'center' }}
+        >
           <Avatar emoji={profile.emoji} photo={profile.avatarUrl} name={profile.name} size="lg" />
-        </div>
+          <span className="avatar-edit">✏️</span>
+        </button>
         <div className="strong" style={{ fontSize: 20, marginTop: 12 }}>
           {profile.name}
         </div>
