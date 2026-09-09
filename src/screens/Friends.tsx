@@ -130,7 +130,13 @@ export default function Friends({ nav }: { nav: Nav }) {
       {mine.length === 0 ? (
         <div className="card empty">
           <div className="big">👟</div>
-          ยังไม่มีเพื่อนในก๊วน ลองเพิ่มด้วยรหัสเพื่อนดูสิ
+          ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> ให้เพื่อน
+          หรือขอรหัสเขามากรอกก็ได้
+          <div style={{ marginTop: 14 }}>
+            <button className="btn primary sm" onClick={() => setAddOpen(true)}>
+              เพิ่มด้วยรหัสเพื่อน
+            </button>
+          </div>
         </div>
       ) : (
         <div className="stack-8">
