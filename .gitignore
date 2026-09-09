@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ตัวแปรสภาพแวดล้อม (มีคีย์จริง)
+.env
+.env.local
