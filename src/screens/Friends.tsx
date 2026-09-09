@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
+import StatusDot from '../components/StatusDot'
 import { useStore } from '../state/store'
 import { agoLabel } from '../lib/format'
 import { paceLabel } from '../lib/geo'
@@ -203,7 +204,10 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
   return (
     <>
       <button className="list-btn" onClick={() => setOpen(true)}>
-        <span className="avatar">{friend.emoji}</span>
+        <span className="avatar-wrap">
+          <span className="avatar">{friend.emoji}</span>
+          <StatusDot online={friend.sharingLocation} />
+        </span>
         <span className="grow">
           <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
             {friend.name}
@@ -212,10 +216,14 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
             {friend.totalKm} กม. · {paceLabel(friend.avgPaceSec)} · {agoLabel(friend.lastActiveAt)}
           </span>
         </span>
-        {friend.sharingLocation && <span className="chip ok">📍 สด</span>}
       </button>
 
-      <Sheet open={open} title={`${friend.emoji} ${friend.name}`} subtitle={friend.bio} onClose={() => setOpen(false)}>
+      <Sheet
+        open={open}
+        title={`${friend.emoji} ${friend.name}`}
+        subtitle={`${friend.sharingLocation ? '🟢 ออนไลน์' : '⚪ ออฟไลน์'} · ${friend.bio}`}
+        onClose={() => setOpen(false)}
+      >
         <div className="card">
           <div className="stat-grid">
             <div className="stat">

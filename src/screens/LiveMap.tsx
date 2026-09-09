@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
+import StatusDot from '../components/StatusDot'
 import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
@@ -141,7 +142,10 @@ export default function LiveMap({ nav }: { nav: Nav }) {
             const away = me ? distanceM(me, p.pos) : null
             return (
               <div key={p.id} className="card tight row">
-                <span className="avatar">{f.emoji}</span>
+                <span className="avatar-wrap">
+                  <span className="avatar">{f.emoji}</span>
+                  <StatusDot online />
+                </span>
                 <span className="grow">
                   <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
                     {f.name}
@@ -151,7 +155,6 @@ export default function LiveMap({ nav }: { nav: Nav }) {
                     {away != null ? ` · ห่างคุณ ${away < 1000 ? `${Math.round(away)} ม.` : `${(away / 1000).toFixed(1)} กม.`}` : ''}
                   </span>
                 </span>
-                <span className="chip ok">📍 สด</span>
               </div>
             )
           })}
@@ -167,7 +170,10 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <span className="avatar">{f.emoji}</span>
+              <span className="avatar-wrap">
+                <span className="avatar">{f.emoji}</span>
+                <StatusDot online={f.sharingLocation} />
+              </span>
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>
