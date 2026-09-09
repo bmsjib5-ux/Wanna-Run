@@ -482,6 +482,21 @@ a { color: var(--accent-text); }
 .swatch.on { border-color: var(--text); transform: scale(1.08); }
 .swatch:active { transform: scale(.94); }
 
+/* การ์ดสามช่องบนหน้าเพื่อน: คัดลอก / QR / กล้อง */
+.tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile-card {
+  display: grid; justify-items: center; gap: 4px;
+  padding: 14px 6px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--text); text-align: center;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.tile-card:active { transform: scale(.96); border-color: rgba(var(--accent-rgb), .5); }
+.tile-icon { font-size: 26px; line-height: 1; }
+.tile-label { font-size: 13px; font-weight: 700; margin-top: 2px; }
+.tile-caption { font-size: 10.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-caption.strong { color: var(--accent-text); }
+
 .seg { display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .seg button { flex: 1; padding: 9px 6px; border-radius: 11px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .seg button.on { background: var(--surface-2); color: var(--text); }
