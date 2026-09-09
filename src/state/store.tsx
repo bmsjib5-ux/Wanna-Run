@@ -26,25 +26,35 @@ import { initialState } from '../lib/seed'
 import { bump, emptyCounters, rollover } from '../lib/counters'
 import { normalizeCode, uid } from '../lib/id'
 import { pushNotice } from '../lib/notify'
+import { isCloudConfigured } from '../lib/supabase'
+import * as api from '../lib/api'
 
-const STORAGE_KEY = 'wanna-run.state.v1'
+const STORAGE_PREFIX = 'wanna-run.state.v1'
 export const XP_PER_LEVEL = 250
 
-function load(): AppState {
-  if (typeof localStorage === 'undefined') return withCounters(initialState())
+/** แยกที่เก็บข้อมูลในเครื่องตามบัญชี เพื่อไม่ให้ข้อมูลปนกันเมื่อสลับผู้ใช้ */
+function storageKey(userId: string | null): string {
+  return userId ? `${STORAGE_PREFIX}:${userId}` : STORAGE_PREFIX
+}
+
+function load(userId: string | null): AppState {
+  const base = withCounters(initialState())
+  if (typeof localStorage === 'undefined') return base
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return withCounters(initialState())
+    const raw = localStorage.getItem(storageKey(userId))
+    if (!raw) return base
     const parsed = JSON.parse(raw) as AppState
-    if (!parsed || parsed.version !== 1) return withCounters(initialState())
+    if (!parsed || parsed.version !== 1) return base
     const rolled = rollover(parsed.counters ?? emptyCounters())
     return {
       ...withCounters(parsed),
       counters: rolled ?? parsed.counters,
-      missions: rolled ? parsed.missions.map((m) => ({ ...m, claimed: m.period === 'season' ? m.claimed : false })) : parsed.missions,
+      missions: rolled
+        ? parsed.missions.map((m) => ({ ...m, claimed: m.period === 'season' ? m.claimed : false }))
+        : parsed.missions,
     }
   } catch {
-    return withCounters(initialState())
+    return base
   }
 }
 
@@ -52,9 +62,9 @@ function withCounters(s: AppState): AppState {
   return { ...s, counters: s.counters ?? emptyCounters() }
 }
 
-function save(state: AppState) {
+function save(state: AppState, userId: string | null) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    localStorage.setItem(storageKey(userId), JSON.stringify(state))
   } catch {
     /* พื้นที่เก็บข้อมูลเต็มหรือถูกปิดใช้งาน */
   }
@@ -114,7 +124,7 @@ type Actions = {
   markRead: (id: ID) => void
 }
 
-type Ctx = { state: AppState; actions: Actions }
+type Ctx = { state: AppState; actions: Actions; cloud: boolean; syncing: boolean }
 
 const StoreContext = createContext<Ctx | null>(null)
 
@@ -127,14 +137,76 @@ function hash(str: string): number {
   return h
 }
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(load)
+export function StoreProvider({
+  children,
+  userId = null,
+}: {
+  children: ReactNode
+  userId?: string | null
+}) {
+  const cloud = isCloudConfigured && !!userId
+  const [state, setState] = useState<AppState>(() => load(userId))
+  const [syncing, setSyncing] = useState(cloud)
   const stateRef = useRef(state)
   stateRef.current = state
+  const cloudRef = useRef(cloud)
+  cloudRef.current = cloud
 
   useEffect(() => {
-    save(state)
-  }, [state])
+    save(state, userId)
+  }, [state, userId])
+
+  const patch = useCallback((fn: (s: AppState) => AppState) => setState(fn), [])
+
+  const addNotification = useCallback<Actions['addNotification']>(
+    (n, alsoNotify = true) => {
+      patch((s) => ({
+        ...s,
+        notifications: [{ ...n, id: uid('nt_'), at: Date.now(), read: false }, ...s.notifications].slice(0, 60),
+      }))
+      if (alsoNotify) pushNotice(n.title, n.body)
+    },
+    [patch],
+  )
+
+  /** ดึงข้อมูลฝั่งเซิร์ฟเวอร์มาทับส่วนที่เป็นข้อมูลร่วม (โปรไฟล์ เพื่อน กลุ่ม นัดวิ่ง) */
+  const refresh = useCallback(async () => {
+    if (!cloudRef.current) return
+    try {
+      const local = stateRef.current.profile
+      const [profile, friends, groups, invites] = await Promise.all([
+        api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
+        api.fetchFriends(),
+        api.fetchGroups(),
+        api.fetchInvites(),
+      ])
+      setState((s) => ({
+        ...s,
+        onboarded: !!profile,
+        profile: profile ?? s.profile,
+        friends,
+        groups,
+        invites,
+      }))
+    } catch (err) {
+      console.error('ดึงข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ', err)
+    } finally {
+      setSyncing(false)
+    }
+  }, [])
+
+  // โหลดข้อมูลครั้งแรกและติดตามการเปลี่ยนแปลงแบบสด
+  useEffect(() => {
+    if (!cloud) {
+      setSyncing(false)
+      return
+    }
+    setSyncing(true)
+    setState(load(userId))
+    void refresh()
+    const unsubscribe = api.subscribeToChanges(() => void refresh())
+    return unsubscribe
+  }, [cloud, userId, refresh])
 
   // ตรวจข้ามวัน/ข้ามสัปดาห์เพื่อรีเซ็ตภารกิจ
   useEffect(() => {
@@ -152,45 +224,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer)
   }, [])
 
-  const patch = useCallback((fn: (s: AppState) => AppState) => setState(fn), [])
-
-  const addNotification = useCallback<Actions['addNotification']>(
-    (n, alsoNotify = true) => {
-      patch((s) => ({
-        ...s,
-        notifications: [
-          { ...n, id: uid('nt_'), at: Date.now(), read: false },
-          ...s.notifications,
-        ].slice(0, 60),
-      }))
-      if (alsoNotify) pushNotice(n.title, n.body)
-    },
-    [patch],
-  )
-
   const actions = useMemo<Actions>(() => {
     const bumpMetric = (s: AppState, metric: MissionMetric, amount: number): AppState => ({
       ...s,
       counters: bump(s.counters, metric, amount),
     })
 
+    /** เรียก API แล้วรีเฟรช พร้อมแจ้งเตือนเมื่อพลาด */
+    const remote = (fn: () => Promise<unknown>) => {
+      fn()
+        .then(() => refresh())
+        .catch((err: Error) => {
+          console.error(err)
+          pushNotice('ซิงก์ไม่สำเร็จ', err.message || 'ลองใหม่อีกครั้ง')
+        })
+    }
+
     return {
-      completeOnboarding: (name, emoji, weeklyGoalKm) =>
+      completeOnboarding: (name, emoji, weeklyGoalKm) => {
+        const clean = name.trim() || 'นักวิ่งนิรนาม'
+        if (cloudRef.current) {
+          const local = stateRef.current.profile
+          remote(async () => {
+            const profile = await api.createMyProfile(clean, emoji, weeklyGoalKm, {
+              level: local.level,
+              xp: local.xp,
+              coins: local.coins,
+            })
+            setState((s) => ({ ...s, onboarded: true, profile }))
+          })
+          return
+        }
         patch((s) => ({
           ...s,
           onboarded: true,
-          profile: { ...s.profile, name: name.trim() || 'นักวิ่งนิรนาม', emoji, weeklyGoalKm },
-        })),
+          profile: { ...s.profile, name: clean, emoji, weeklyGoalKm },
+        }))
+      },
 
-      updateProfile: (p) => patch((s) => ({ ...s, profile: { ...s.profile, ...p } })),
+      updateProfile: (p) => {
+        patch((s) => ({ ...s, profile: { ...s.profile, ...p } }))
+        if (cloudRef.current) void api.updateMyProfile(p).catch(console.error)
+      },
 
       resetAll: () => {
         try {
-          localStorage.removeItem(STORAGE_KEY)
+          localStorage.removeItem(storageKey(userId))
         } catch {
           /* ไม่มีอะไรให้ลบ */
         }
         setState(withCounters(initialState()))
+        if (cloudRef.current) void refresh()
       },
 
       addFriendByCode: (raw) => {
@@ -200,10 +284,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         const s = stateRef.current
         if (code === s.profile.code) return { ok: false, message: 'นี่คือรหัสของคุณเอง 😄' }
+
+        if (cloudRef.current) {
+          remote(async () => {
+            const message = await api.sendFriendRequestByCode(code)
+            pushNotice('เพิ่มเพื่อน', message)
+          })
+          return { ok: true, message: 'กำลังส่งคำขอ...' }
+        }
+
         const existing = s.friends.find((f) => f.code === code)
         if (existing?.status === 'friend') return { ok: false, message: `${existing.name} เป็นเพื่อนคุณอยู่แล้ว` }
         if (existing?.status === 'outgoing') return { ok: false, message: 'ส่งคำขอไปแล้ว รอตอบรับอยู่' }
-
         if (existing) {
           actionsRef.current.sendFriendRequest(existing.id)
           return { ok: true, message: `ส่งคำขอถึง ${existing.name} แล้ว` }
@@ -231,6 +323,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sendFriendRequest: (friendId) => {
         const target = stateRef.current.friends.find((f) => f.id === friendId)
         if (!target) return
+        if (cloudRef.current) {
+          remote(() => api.sendFriendRequestByCode(target.code))
+          return
+        }
         patch((s) => ({
           ...s,
           friends: s.friends.map((f) => (f.id === friendId ? { ...f, status: 'outgoing' } : f)),
@@ -239,31 +335,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
 
       acceptFriend: (friendId) => {
-        patch((s) => {
-          const f = s.friends.find((x) => x.id === friendId)
-          if (!f) return s
-          return bumpMetric(
-            {
-              ...s,
-              friends: s.friends.map((x) => (x.id === friendId ? { ...x, status: 'friend' } : x)),
-            },
-            'friendAdded',
-            1,
-          )
-        })
         const f = stateRef.current.friends.find((x) => x.id === friendId)
-        if (f) addNotification({ kind: 'friend', title: 'เป็นเพื่อนกันแล้ว 🎉', body: `${f.name} เข้าร่วมก๊วนของคุณ`, goto: 'friends' })
+        if (cloudRef.current) {
+          remote(async () => {
+            await api.acceptFriendRequest(friendId)
+            patch((s) => bumpMetric(s, 'friendAdded', 1))
+          })
+        } else {
+          patch((s) =>
+            bumpMetric(
+              { ...s, friends: s.friends.map((x) => (x.id === friendId ? { ...x, status: 'friend' } : x)) },
+              'friendAdded',
+              1,
+            ),
+          )
+        }
+        if (f) {
+          addNotification({
+            kind: 'friend',
+            title: 'เป็นเพื่อนกันแล้ว 🎉',
+            body: `${f.name} เข้าร่วมก๊วนของคุณ`,
+            goto: 'friends',
+          })
+        }
       },
 
-      declineFriend: (friendId) =>
-        patch((s) => ({ ...s, friends: s.friends.filter((f) => f.id !== friendId) })),
+      declineFriend: (friendId) => {
+        if (cloudRef.current) {
+          remote(() => api.removeFriendship(friendId))
+          return
+        }
+        patch((s) => ({ ...s, friends: s.friends.filter((f) => f.id !== friendId) }))
+      },
 
-      removeFriend: (friendId) =>
+      removeFriend: (friendId) => {
+        if (cloudRef.current) {
+          remote(() => api.removeFriendship(friendId))
+          return
+        }
         patch((s) => ({
           ...s,
           friends: s.friends.filter((f) => f.id !== friendId),
           groups: s.groups.map((g) => ({ ...g, memberIds: g.memberIds.filter((id) => id !== friendId) })),
-        })),
+        }))
+      },
 
       createGroup: (name, emoji, description, memberIds) => {
         const group: Group = {
@@ -274,15 +389,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           memberIds,
           createdAt: Date.now(),
         }
-        patch((s) => bumpMetric({ ...s, groups: [group, ...s.groups] }, 'groupCreated', 1))
-        addNotification({ kind: 'group', title: `สร้างกลุ่ม ${group.name}`, body: `สมาชิก ${memberIds.length + 1} คน พร้อมลุย!`, goto: 'groups' })
+        patch((s) => bumpMetric(s, 'groupCreated', 1))
+        if (cloudRef.current) {
+          remote(() => api.createGroupRemote(group.name, emoji, group.description, memberIds))
+        } else {
+          patch((s) => ({ ...s, groups: [group, ...s.groups] }))
+        }
+        addNotification({
+          kind: 'group',
+          title: `สร้างกลุ่ม ${group.name}`,
+          body: `สมาชิก ${memberIds.length + 1} คน พร้อมลุย!`,
+          goto: 'groups',
+        })
         return group
       },
 
-      updateGroup: (groupId, p) =>
-        patch((s) => ({ ...s, groups: s.groups.map((g) => (g.id === groupId ? { ...g, ...p } : g)) })),
+      updateGroup: (groupId, p) => {
+        if (cloudRef.current) {
+          remote(() => api.updateGroupRemote(groupId, p))
+          return
+        }
+        patch((s) => ({ ...s, groups: s.groups.map((g) => (g.id === groupId ? { ...g, ...p } : g)) }))
+      },
 
-      deleteGroup: (groupId) => patch((s) => ({ ...s, groups: s.groups.filter((g) => g.id !== groupId) })),
+      deleteGroup: (groupId) => {
+        if (cloudRef.current) {
+          remote(() => api.deleteGroupRemote(groupId))
+          return
+        }
+        patch((s) => ({ ...s, groups: s.groups.filter((g) => g.id !== groupId) }))
+      },
 
       createInvite: (input) => {
         const invite: RunInvite = {
@@ -300,22 +436,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           createdAt: Date.now(),
           status: 'open',
         }
-        patch((s) => bumpMetric({ ...s, invites: [invite, ...s.invites] }, 'inviteSent', 1))
-        scheduleReplies(invite)
+        patch((s) => bumpMetric(s, 'inviteSent', 1))
+        if (cloudRef.current) {
+          remote(() => api.createInviteRemote({ ...input, title: invite.title, note: invite.note }))
+        } else {
+          patch((s) => ({ ...s, invites: [invite, ...s.invites] }))
+          scheduleReplies(invite)
+        }
         return invite
       },
 
-      replyInvite: (inviteId, reply) =>
+      replyInvite: (inviteId, reply) => {
         patch((s) => ({
           ...s,
           invites: s.invites.map((i) => (i.id === inviteId ? { ...i, myReply: reply } : i)),
-        })),
+        }))
+        if (cloudRef.current) remote(() => api.replyInviteRemote(inviteId, reply))
+      },
 
-      cancelInvite: (inviteId) =>
+      cancelInvite: (inviteId) => {
+        if (cloudRef.current) {
+          remote(() => api.cancelInviteRemote(inviteId))
+          return
+        }
         patch((s) => ({
           ...s,
           invites: s.invites.map((i) => (i.id === inviteId ? { ...i, status: 'cancelled' } : i)),
-        })),
+        }))
+      },
 
       saveRun: (run) => {
         patch((s) => {
@@ -324,6 +472,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           next = bumpMetric(next, 'distanceKm', run.distanceM / 1000)
           const gainedXp = Math.round((run.distanceM / 1000) * 20) + 15
           next = { ...next, profile: { ...next.profile, xp: next.profile.xp + gainedXp } }
+
+          if (cloudRef.current) {
+            const totalKm = next.runs.reduce((sum, r) => sum + r.distanceM, 0) / 1000
+            const totalMs = next.runs.reduce((sum, r) => sum + r.movingMs, 0)
+            const pace = totalKm > 0 ? Math.round(totalMs / 1000 / totalKm) : null
+            void api.updateMyStats(totalKm, pace).catch(console.error)
+          }
           return next
         })
         addNotification({
@@ -341,6 +496,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const next = { ...s, profile: { ...s.profile, sharingLocation: on } }
           return on ? bumpMetric(next, 'locationShared', 1) : next
         })
+        if (cloudRef.current) {
+          void api.updateMyProfile({ sharingLocation: on }).catch(console.error)
+          if (!on) void api.clearMyLocation().catch(console.error)
+        }
         if (on) {
           addNotification({
             kind: 'location',
@@ -355,8 +514,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         patch((s) => {
           const m = s.missions.find((x) => x.id === missionId)
           if (!m || m.claimed) return s
-          const progress = s.counters[m.period][m.metric]
-          if (progress < m.target) return s
+          if (s.counters[m.period][m.metric] < m.target) return s
           return {
             ...s,
             missions: s.missions.map((x) => (x.id === missionId ? { ...x, claimed: true } : x)),
@@ -389,12 +547,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })),
     }
 
-    /** จำลองว่าอีกฝ่ายกดตอบรับคำขอเป็นเพื่อน */
+    /** โหมดในเครื่อง: จำลองว่าอีกฝ่ายกดตอบรับคำขอเป็นเพื่อน */
     function scheduleAccept(friend: Friend) {
       window.setTimeout(() => {
         patch((s) => ({
           ...s,
-          friends: s.friends.map((f) => (f.id === friend.id && f.status === 'outgoing' ? { ...f, status: 'friend' } : f)),
+          friends: s.friends.map((f) =>
+            f.id === friend.id && f.status === 'outgoing' ? { ...f, status: 'friend' } : f,
+          ),
           counters: bump(s.counters, 'friendAdded', 1),
         }))
         addNotification({
@@ -406,7 +566,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }, 3500)
     }
 
-    /** จำลองการตอบรับคำชวนวิ่งจากเพื่อนที่ถูกเชิญ */
+    /** โหมดในเครื่อง: จำลองการตอบรับคำชวนวิ่ง */
     function scheduleReplies(invite: RunInvite) {
       invite.inviteeIds.forEach((friendId, index) => {
         window.setTimeout(
@@ -431,12 +591,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         )
       })
     }
-  }, [patch, addNotification])
+  }, [patch, addNotification, refresh, userId])
 
   const actionsRef = useRef(actions)
   actionsRef.current = actions
 
-  const value = useMemo(() => ({ state, actions }), [state, actions])
+  const value = useMemo(() => ({ state, actions, cloud, syncing }), [state, actions, cloud, syncing])
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 

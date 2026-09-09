@@ -131,6 +131,43 @@ as $$
       or exists (select 1 from public.group_members m where m.group_id = gid and m.member = auth.uid());
 $$;
 
+create or replace function public.is_group_owner(gid uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (select 1 from public.groups g where g.id = gid and g.owner = auth.uid());
+$$;
+
+-- คำชวนวิ่ง: ต้องใช้ security definer เพราะ policy ของ invites กับ invite_replies
+-- อ้างถึงกันไปกลับ ถ้าปล่อยให้ผ่าน RLS ปกติ Postgres จะฟ้อง infinite recursion
+create or replace function public.is_invite_host(inv uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (select 1 from public.invites i where i.id = inv and i.host = auth.uid());
+$$;
+
+create or replace function public.can_see_invite(inv uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (select 1 from public.invites i where i.id = inv and i.host = auth.uid())
+      or exists (select 1 from public.invite_replies r where r.invite_id = inv and r.member = auth.uid())
+      or exists (
+        select 1 from public.invites i
+        where i.id = inv and i.group_id is not null and public.in_group(i.group_id)
+      );
+$$;
+
 -- สุ่มรหัสเพื่อน RUN-XXXX โดยตัดอักษรที่สับสนง่าย (I O 0 1) ออก
 create or replace function public.gen_friend_code()
 returns text
@@ -284,19 +321,16 @@ create policy group_members_select on public.group_members for select using (pub
 
 drop policy if exists group_members_insert on public.group_members;
 create policy group_members_insert on public.group_members for insert
-  with check (exists (select 1 from public.groups g where g.id = group_id and g.owner = auth.uid()));
+  with check (public.is_group_owner(group_id));
 
 drop policy if exists group_members_delete on public.group_members;
 create policy group_members_delete on public.group_members for delete
-  using (member = auth.uid()
-      or exists (select 1 from public.groups g where g.id = group_id and g.owner = auth.uid()));
+  using (member = auth.uid() or public.is_group_owner(group_id));
 
 -- invites: เจ้าภาพจัดการได้ ผู้ถูกชวนและสมาชิกกลุ่มเห็นได้
 drop policy if exists invites_select on public.invites;
 create policy invites_select on public.invites for select
-  using (host = auth.uid()
-      or exists (select 1 from public.invite_replies r where r.invite_id = id and r.member = auth.uid())
-      or (group_id is not null and public.in_group(group_id)));
+  using (public.can_see_invite(id));
 
 drop policy if exists invites_insert on public.invites;
 create policy invites_insert on public.invites for insert with check (host = auth.uid());
@@ -311,12 +345,11 @@ create policy invites_delete on public.invites for delete using (host = auth.uid
 -- invite_replies: เจ้าภาพเห็นทุกคำตอบ แต่ละคนแก้ได้เฉพาะคำตอบตัวเอง
 drop policy if exists invite_replies_select on public.invite_replies;
 create policy invite_replies_select on public.invite_replies for select
-  using (member = auth.uid()
-      or exists (select 1 from public.invites i where i.id = invite_id and i.host = auth.uid()));
+  using (member = auth.uid() or public.is_invite_host(invite_id));
 
 drop policy if exists invite_replies_insert on public.invite_replies;
 create policy invite_replies_insert on public.invite_replies for insert
-  with check (exists (select 1 from public.invites i where i.id = invite_id and i.host = auth.uid()));
+  with check (public.is_invite_host(invite_id));
 
 drop policy if exists invite_replies_update on public.invite_replies;
 create policy invite_replies_update on public.invite_replies for update
@@ -350,10 +383,19 @@ begin
   end if;
 end $$;
 
-alter publication supabase_realtime add table public.locations;
-alter publication supabase_realtime add table public.friendships;
-alter publication supabase_realtime add table public.invites;
-alter publication supabase_realtime add table public.invite_replies;
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['locations', 'friendships', 'invites', 'invite_replies', 'profiles'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
 
 -- ให้ realtime ส่งค่าเดิมมาด้วยตอนแถวถูกลบ/แก้ (จำเป็นสำหรับ filter ฝั่ง client)
 alter table public.locations replica identity full;

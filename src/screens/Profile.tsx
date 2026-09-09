@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import { levelOf, useStore } from '../state/store'
+import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { shortDate, startOfWeek, whenLabel } from '../lib/format'
 import { notificationPermission, requestNotificationPermission } from '../lib/notify'
@@ -12,7 +13,7 @@ import type { RunSession } from '../types'
 const AVATARS = ['🏃', '🦊', '🐼', '🐯', '🦄', '🐧', '🐨', '🐸', '🦁', '🐰', '🐻', '🐙']
 
 export default function Profile({ nav }: { nav: Nav }) {
-  const { state, actions } = useStore()
+  const { state, actions, cloud } = useStore()
   const { profile, runs } = state
   const [editing, setEditing] = useState(false)
   const [detail, setDetail] = useState<RunSession | null>(null)
@@ -157,11 +158,16 @@ export default function Profile({ nav }: { nav: Nav }) {
       )}
 
       <div className="section-title">ตั้งค่า</div>
-      <button className="btn danger block" onClick={() => setConfirmReset(true)}>
-        ล้างข้อมูลทั้งหมดในเครื่อง
-      </button>
+      <div className="stack-8">
+        {cloud && <SignOutButton />}
+        <button className="btn danger block" onClick={() => setConfirmReset(true)}>
+          ล้างข้อมูลทั้งหมดในเครื่อง
+        </button>
+      </div>
       <div className="card tight muted tiny" style={{ marginTop: 12, lineHeight: 1.7 }}>
-        Wanna Run? เก็บข้อมูลทั้งหมดไว้ในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการส่งขึ้นเซิร์ฟเวอร์
+        {cloud
+          ? 'เพื่อน กลุ่ม และนัดวิ่งซิงก์ขึ้นเซิร์ฟเวอร์ ส่วนประวัติการวิ่ง ภารกิจ และคะแนนเกมเก็บไว้ในเครื่องนี้เท่านั้น'
+          : 'Wanna Run? เก็บข้อมูลทั้งหมดไว้ในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการส่งขึ้นเซิร์ฟเวอร์'}
       </div>
 
       <Sheet open={editing} title="แก้ไขโปรไฟล์" onClose={() => setEditing(false)}>
@@ -279,4 +285,13 @@ function earnedBadges(km: number, runCount: number, friendCount: number, level: 
     { icon: '⭐', name: 'เลเวล 5', detail: 'ไต่ถึงเลเวล 5', earned: level >= 5 },
     { icon: '🔥', name: 'นักวิ่งขาประจำ', detail: 'วิ่งครบ 10 ครั้ง', earned: runCount >= 10 },
   ]
+}
+
+function SignOutButton() {
+  const { signOut } = useAuth()
+  return (
+    <button className="btn block" onClick={() => void signOut()}>
+      ออกจากระบบ
+    </button>
+  )
 }
