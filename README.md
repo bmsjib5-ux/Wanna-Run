@@ -31,6 +31,26 @@ npm run preview  # ลองรันไฟล์ production
 เปิดจากมือถือให้ใช้ `npm run dev -- --host` แล้วเข้าจาก IP ของเครื่อง
 (เบราว์เซอร์จะให้สิทธิ์ GPS เฉพาะบน `https://` หรือ `localhost` เท่านั้น)
 
+## Deploy ขึ้นเว็บ
+
+แอปเป็น static site ล้วน (ไม่มีเซิร์ฟเวอร์/ฐานข้อมูล) จึงขึ้นโฮสต์ไหนก็ได้ที่เสิร์ฟไฟล์ static
+
+### Render
+
+ใน repo มี `render.yaml` เตรียมไว้แล้ว — เข้า [Render Dashboard](https://dashboard.render.com/select-repo?type=blueprint)
+เลือก **New → Blueprint** แล้วชี้มาที่ repo นี้ Render จะอ่านค่าจากไฟล์เองทั้งหมด
+(build ด้วย `npm ci && npm run build`, เสิร์ฟจาก `dist/`, rewrite ทุกเส้นทางไปที่ `index.html`)
+
+ใช้แผน Free ได้ และจะได้ URL แบบ `https://wanna-run.onrender.com`
+
+> ต้อง deploy ผ่าน **https** เท่านั้น เพราะเบราว์เซอร์ให้สิทธิ์ GPS และการแจ้งเตือน
+> เฉพาะบน https หรือ localhost — Render ให้ HTTPS มาอยู่แล้ว
+
+### โฮสต์อื่น
+
+`npm run build` แล้วอัปโหลดโฟลเดอร์ `dist/` ขึ้น Netlify / Vercel / Cloudflare Pages / GitHub Pages
+อย่าลืมตั้ง SPA fallback ให้ทุกเส้นทางตกมาที่ `index.html`
+
 ## โครงสร้างโค้ด
 
 ```

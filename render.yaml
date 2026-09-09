@@ -1,0 +1,24 @@
+# Blueprint สำหรับ deploy บน Render (https://render.com)
+# แอปนี้เป็น static site ล้วน ไม่ต้องมีเซิร์ฟเวอร์หรือฐานข้อมูล
+services:
+  - type: web
+    name: wanna-run
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      # service worker ต้องไม่ถูกแคช ไม่งั้นผู้ใช้จะค้างอยู่กับเวอร์ชันเก่า
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /manifest.webmanifest
+        name: Cache-Control
+        value: no-cache
+    routes:
+      # แอปเป็น SPA — เส้นทางที่ไม่ตรงไฟล์ใดให้ตกมาที่ index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
