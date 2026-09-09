@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
+import L, { type DivIcon } from 'leaflet'
 import type { LatLng } from '../types'
 
 export type MapPin = {
@@ -13,7 +13,17 @@ export type MapPin = {
   me?: boolean
 }
 
-function icon(pin: MapPin) {
+// เก็บ icon ที่สร้างแล้วไว้ใช้ซ้ำ ไม่ต้องสร้างใหม่ทุกครั้งที่ re-render
+// (ชื่อ Map ในไฟล์นี้เป็นคอมโพเนนต์ จึงใช้ออบเจกต์ธรรมดาแทน)
+const iconCache: Record<string, DivIcon> = {}
+
+function icon(pin: MapPin): DivIcon {
+  const key = `${pin.emoji}|${pin.photo ?? ''}|${pin.label ?? ''}|${pin.me ? 1 : 0}`
+  iconCache[key] ??= buildIcon(pin)
+  return iconCache[key]
+}
+
+function buildIcon(pin: MapPin) {
   return L.divIcon({
     className: '',
     html: `<div class="pin ${pin.me ? 'me' : ''}"><div class="bubble">${
@@ -30,6 +40,23 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
   )
+}
+
+/** บอก Leaflet ให้คำนวณขนาดใหม่เมื่อกล่องแผนที่เปลี่ยนขนาด */
+function ResizeWatcher() {
+  const map = useMap()
+  useEffect(() => {
+    const el = map.getContainer()
+    const observer = new ResizeObserver(() => map.invalidateSize({ animate: false }))
+    observer.observe(el)
+    // เผื่อกรณีที่ layout ยังไม่นิ่งตอน mount แรก
+    const t = window.setTimeout(() => map.invalidateSize({ animate: false }), 250)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(t)
+    }
+  }, [map])
+  return null
 }
 
 function Recenter({ center, zoom, fit }: { center: LatLng; zoom?: number; fit?: [[number, number], [number, number]] | null }) {
@@ -88,6 +115,7 @@ export default function Map({
         {pins.map((p) => (
           <Marker key={p.id} position={[p.pos.lat, p.pos.lng]} icon={icon(p)} />
         ))}
+        <ResizeWatcher />
         {follow && <Recenter center={center} zoom={zoom} fit={fit} />}
         {onPick && <ClickCatcher onPick={onPick} />}
       </MapContainer>
