@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import L, { type DivIcon } from 'leaflet'
 import type { LatLng } from '../types'
@@ -73,6 +73,27 @@ function ClickCatcher({ onPick }: { onPick: (p: LatLng) => void }) {
   return null
 }
 
+/** ชั้นแผนที่ให้เลือกแบบเดียวกับ Google Maps: แผนที่ปกติ กับ ภาพถ่ายดาวเทียม */
+const LAYERS = {
+  map: {
+    label: '🗺️ แผนที่',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    // ภาพดาวเทียมของ Esri ไม่มีชื่อถนน จึงต้องซ้อนชั้นตัวอักษรทับอีกที
+    labels: null as string | null,
+  },
+  satellite: {
+    label: '🛰️ ดาวเทียม',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'ภาพถ่าย &copy; Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19,
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  },
+} as const
+
+export type MapLayer = keyof typeof LAYERS
+
 type Props = {
   center: LatLng
   zoom?: number
@@ -82,6 +103,12 @@ type Props = {
   onPick?: (p: LatLng) => void
   className?: string
   follow?: boolean
+  /** แสดงปุ่มสลับแผนที่/ดาวเทียม */
+  layers?: boolean
+  /** แสดงปุ่มกลับไปตำแหน่งฉัน */
+  onLocate?: () => void
+  /** ตำแหน่งฉันพร้อมใช้แล้วหรือยัง (ใช้บอกสถานะปุ่ม) */
+  locating?: boolean
 }
 
 export default function Map({
@@ -93,8 +120,13 @@ export default function Map({
   onPick,
   className = 'map-box',
   follow = true,
+  layers = false,
+  onLocate,
+  locating = false,
 }: Props) {
   const line = useMemo(() => (track ?? []).map((p) => [p.lat, p.lng] as [number, number]), [track])
+  const [layer, setLayer] = useState<MapLayer>('map')
+  const tiles = LAYERS[layer]
 
   return (
     <div className={className}>
@@ -107,16 +139,13 @@ export default function Map({
         scrollWheelZoom
       >
         {/*
-          ใช้ tile มาตรฐานของ OpenStreetMap: มีชื่อถนนและสถานที่ภาษาไทยครบ
-          หน้าตาใกล้เคียง Google Maps และไม่ต้องมี API key
-          (CARTO ที่ใช้เดิมเปลี่ยนนโยบายให้ต้องมีคีย์ ไม่งั้นแปะลายน้ำทับแผนที่)
-          นโยบายของ OSM ขอให้ใส่ที่มาและไม่ดึงจำนวนมหาศาล เหมาะกับแอปขนาดเล็ก
+          แผนที่ปกติใช้ tile มาตรฐานของ OpenStreetMap: มีชื่อถนนและสถานที่ภาษาไทยครบ
+          ไม่ต้องมี API key (CARTO ที่ใช้เดิมเปลี่ยนนโยบายให้ต้องมีคีย์ ไม่งั้นแปะลายน้ำทับ)
+          ส่วนดาวเทียมใช้ภาพของ Esri ซึ่งเปิดให้ใช้ได้เมื่อใส่ที่มา
+          ทั้งสองเจ้าขอให้ไม่ดึงจำนวนมหาศาล ซึ่งเหมาะกับแอปขนาดนี้
         */}
-        <TileLayer
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          maxZoom={19}
-        />
+        <TileLayer key={layer} url={tiles.url} attribution={tiles.attribution} maxZoom={tiles.maxZoom} />
+        {tiles.labels && <TileLayer key={`${layer}-labels`} url={tiles.labels} maxZoom={tiles.maxZoom} />}
         <ZoomControl position="bottomright" />
         {line.length > 1 && <Polyline positions={line} pathOptions={{ color: '#c6f24e', weight: 5, opacity: 0.95 }} />}
         {pins.map((p) => (
@@ -126,6 +155,22 @@ export default function Map({
         {follow && <Recenter center={center} zoom={zoom} fit={fit} />}
         {onPick && <ClickCatcher onPick={onPick} />}
       </MapContainer>
+
+      {layers && (
+        <button
+          className="map-ctl layers"
+          onClick={() => setLayer((v) => (v === 'map' ? 'satellite' : 'map'))}
+          aria-label={`สลับเป็น${layer === 'map' ? 'ภาพดาวเทียม' : 'แผนที่ปกติ'}`}
+        >
+          {LAYERS[layer === 'map' ? 'satellite' : 'map'].label}
+        </button>
+      )}
+
+      {onLocate && (
+        <button className="map-ctl locate" onClick={onLocate} aria-label="ไปที่ตำแหน่งฉัน">
+          {locating ? '◌' : '◎'}
+        </button>
+      )}
     </div>
   )
 }
