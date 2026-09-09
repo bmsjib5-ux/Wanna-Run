@@ -54,12 +54,13 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
     start(simulated, geo.position ?? undefined)
   }
 
+  // ระยะต่ำกว่านี้ถือว่ายังไม่ได้วิ่ง (GPS ยังไม่นิ่ง หรือกดจบเร็วไป) จะแสดงเหตุผลแทนการบันทึก
+  const MIN_SAVE_M = 10
+  const tooShort = !!summary && summary.distanceM < MIN_SAVE_M
+
   const finish = () => {
     stop()
-    if (tracker.distanceM < 10) {
-      reset()
-      return
-    }
+    // แสดงสรุปเสมอ — ก่อนหน้านี้ระยะสั้นจะรีเซ็ตเงียบ ๆ ทำให้เหมือนหน้าจอหายไปเฉย ๆ
     const run: RunSession = {
       id: uid('rn_'),
       startedAt: tracker.path[0]?.t ?? Date.now() - tracker.elapsedMs,
@@ -226,10 +227,46 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
         </button>
       </Sheet>
 
-      <Sheet open={!!summary} title="จบกิจกรรมแล้ว 🎉" subtitle="ดูสรุปแล้วบันทึกเก็บไว้ได้เลย" onClose={() => setSummary(null)}>
-        {summary && (
+      <Sheet
+        open={!!summary}
+        title={tooShort ? 'ยังไม่ได้ระยะทาง' : 'จบกิจกรรมแล้ว 🎉'}
+        subtitle={tooShort ? `ได้ไม่ถึง ${MIN_SAVE_M} เมตร จึงยังบันทึกไม่ได้` : 'ดูสรุปแล้วบันทึกเก็บไว้ได้เลย'}
+        onClose={() => {
+          setSummary(null)
+          if (tooShort) reset()
+        }}
+      >
+        {summary && tooShort && (
           <>
-            <Map center={summary.path[0] ?? center} zoom={16} fit={boundsOf(summary.path)} track={summary.path} />
+            <div className="card tight small" style={{ lineHeight: 1.7 }}>
+              จับได้ <b>{Math.round(summary.distanceM)} ม.</b> ใน {formatDuration(summary.movingMs)}
+              {tracker.accuracy != null && tracker.accuracy > 40 && (
+                <>
+                  <br />
+                  GPS ยังไม่แม่น (±{Math.round(tracker.accuracy)} ม.) — จุดที่คลาดเกิน 40 ม. จะไม่ถูกนับ
+                </>
+              )}
+              <br />
+              ลองออกไปที่โล่ง รอให้ขึ้น "GPS ±20 ม." ก่อนกดเริ่ม แล้ววิ่งอย่างน้อยสักสิบเมตร
+              หรือใช้โหมดจำลองเพื่อทดลองแอปในอาคาร
+            </div>
+            <button
+              className="btn primary block"
+              style={{ marginTop: 14 }}
+              onClick={() => {
+                setSummary(null)
+                reset()
+              }}
+            >
+              เข้าใจแล้ว
+            </button>
+          </>
+        )}
+        {summary && !tooShort && (
+          <>
+            {summary.path.length > 1 && (
+              <Map center={summary.path[0] ?? center} zoom={16} fit={boundsOf(summary.path)} track={summary.path} />
+            )}
             <div className="card" style={{ marginTop: 12 }}>
               <div className="stat-grid">
                 <div className="stat">
