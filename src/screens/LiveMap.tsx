@@ -26,7 +26,10 @@ export default function LiveMap({ nav }: { nav: Nav }) {
     () => friends.filter((f) => f.sharingLocation).map((f) => ({ id: f.id, home: f.home, sharingLocation: true })),
     [friends],
   )
-  const simulated = useFriendPings(cloud ? [] : sharingFriends)
+  // ต้องเป็นอาร์เรย์ตัวเดิมเมื่อค่าไม่เปลี่ยน ไม่งั้น effect ใน useFriendPings
+  // จะเห็นว่า dependency เปลี่ยนทุกครั้งที่ render แล้ววนไม่รู้จบ
+  const simulatedInput = useMemo(() => (cloud ? [] : sharingFriends), [cloud, sharingFriends])
+  const simulated = useFriendPings(simulatedInput)
   const live = useLiveFriendLocations(cloud)
   const pings = cloud ? live : simulated
 
@@ -219,9 +222,7 @@ function useLiveFriendLocations(enabled: boolean): FriendPing[] {
     }
     pull()
     const timer = window.setInterval(pull, 8000)
-    const unsubscribe = api.subscribeToChanges((table) => {
-      if (table === 'locations') pull()
-    })
+    const unsubscribe = api.subscribeToChanges(() => pull(), ['locations'])
     return () => {
       alive.current = false
       window.clearInterval(timer)

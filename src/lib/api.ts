@@ -447,16 +447,28 @@ export async function fetchFriendLocations(): Promise<FriendLocation[]> {
     }))
 }
 
-/** รับสัญญาณเมื่อข้อมูลฝั่งเซิร์ฟเวอร์เปลี่ยน คืนฟังก์ชันสำหรับยกเลิก */
-export function subscribeToChanges(onChange: (table: string) => void): () => void {
+const WATCHED_TABLES = ['friendships', 'invites', 'invite_replies', 'locations', 'profiles']
+
+/**
+ * รับสัญญาณเมื่อข้อมูลฝั่งเซิร์ฟเวอร์เปลี่ยน คืนฟังก์ชันสำหรับยกเลิก
+ *
+ * ชื่อ channel ต้องไม่ซ้ำกันในแต่ละครั้งที่เรียก เพราะ supabase-js จะคืน channel
+ * ตัวเดิมเมื่อชื่อซ้ำ แล้วการ .on() ทับหลังจากที่ตัวนั้น subscribe ไปแล้วจะโยน error
+ * ("cannot add postgres_changes callbacks ... after subscribe()") ทำให้ฝั่งที่เรียกทีหลัง
+ * พังทั้งคอมโพเนนต์
+ */
+export function subscribeToChanges(
+  onChange: (table: string) => void,
+  tables: string[] = WATCHED_TABLES,
+): () => void {
   const sb = requireSupabase()
-  const channel = sb.channel('wanna-run-live')
-  for (const table of ['friendships', 'invites', 'invite_replies', 'locations', 'profiles']) {
+  const channel = sb.channel(`wanna-run:${newId()}`)
+  for (const table of tables) {
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange(table))
   }
   channel.subscribe()
   return () => {
-    sb.removeChannel(channel)
+    void sb.removeChannel(channel)
   }
 }
 

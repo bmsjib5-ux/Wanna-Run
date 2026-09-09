@@ -262,7 +262,8 @@ export function useFriendPings(friends: Array<{ id: string; home: LatLng; sharin
         st.pos = offset(st.pos, metersPerTick, st.heading)
         out.push({ id: f.id, pos: st.pos, movingKmh: st.speed })
       }
-      setPings(out)
+      // ไม่มีใครแชร์ตำแหน่งก็ไม่ต้องสร้างอาร์เรย์ใหม่ทุกรอบ ไม่งั้นทั้งหน้าจะวาดใหม่ทุก 2 วินาที
+      setPings((prev) => (prev.length === 0 && out.length === 0 ? prev : out))
     }
 
     step()
