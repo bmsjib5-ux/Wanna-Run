@@ -6,6 +6,7 @@ import Map from '../components/Map'
 import Avatar from '../components/Avatar'
 import AvatarPicker from '../components/AvatarPicker'
 import ThemePicker from '../components/ThemePicker'
+import AboutBuild from '../components/AboutBuild'
 import { levelOf, useStore } from '../state/store'
 import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
@@ -202,6 +203,7 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 
       <div className="section-title">ตั้งค่า</div>
       <ThemePicker />
+      <AboutBuild />
       <div className="stack-8" style={{ marginTop: 12 }}>
         {cloud && <SignOutButton />}
         <button className="btn danger block" onClick={() => setConfirmReset(true)}>
