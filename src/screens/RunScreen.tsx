@@ -1,65 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import { useStore } from '../state/store'
-import { useCurrentPosition, useRunTracker } from '../lib/useGeo'
+import { useCurrentPosition } from '../lib/useGeo'
+import { useRun } from '../state/run'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { uid } from '../lib/id'
-import { notificationPermission, requestNotificationPermission, vibrate } from '../lib/notify'
-import { useWakeLock } from '../lib/wakeLock'
-import { closeRunNotification, showRunNotification } from '../lib/runNotice'
+import { notificationPermission, requestNotificationPermission } from '../lib/notify'
 import type { RunSession } from '../types'
 
-export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: string }) {
+export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; inviteId?: string }) {
   const { state, actions } = useStore()
   const geo = useCurrentPosition(true)
-  const { tracker, start, pause, resume, stop, reset } = useRunTracker()
+  const { tracker, inviteId: activeInvite, wake, start, pause, resume, stop, reset } = useRun()
   const [summary, setSummary] = useState<RunSession | null>(null)
   const [askSim, setAskSim] = useState(false)
 
+  // ถ้ากำลังวิ่งอยู่ ใช้นัดที่ผูกไว้ตอนเริ่ม (กลับมาจากหน้าอื่นจะไม่มีพารามิเตอร์แล้ว)
+  const inviteId = tracker.running ? activeInvite : inviteParam
   const invite = inviteId ? state.invites.find((i) => i.id === inviteId) : undefined
 
-  const center = tracker.last ?? geo.fallback
+  const center = tracker.last ?? tracker.path[tracker.path.length - 1] ?? geo.fallback
   const fit = useMemo(() => (tracker.path.length > 3 ? boundsOf(tracker.path) : null), [tracker.path])
-
-  // เตือนเมื่อครบทุก 1 กิโลเมตร
-  const km = Math.floor(tracker.distanceM / 1000)
-  useEffect(() => {
-    if (tracker.running && km > 0) vibrate([60, 40, 60])
-  }, [km, tracker.running])
-
-  // กันจอดับระหว่างวิ่ง ไม่งั้น GPS หยุดตามจอ
-  const wake = useWakeLock(tracker.running)
-
-  // แจ้งเตือนค้างบนแถบสถานะ (Android) อัปเดตทุก 30 วิ, ทุกกิโล และตอนพัก/ไปต่อ
-  const notifyOn = tracker.running && notificationPermission() === 'granted'
-  const latest = useRef({ distanceM: 0, elapsedMs: 0, paused: false })
-  latest.current = { distanceM: tracker.distanceM, elapsedMs: tracker.elapsedMs, paused: tracker.paused }
-  const halfMinute = Math.floor(tracker.elapsedMs / 30_000)
-  useEffect(() => {
-    if (!notifyOn) {
-      void closeRunNotification()
-      return
-    }
-    const { distanceM, elapsedMs, paused } = latest.current
-    void showRunNotification(distanceM, elapsedMs, paused)
-  }, [notifyOn, tracker.paused, km, halfMinute])
-  useEffect(() => () => void closeRunNotification(), [])
 
   /** ขอสิทธิ์แจ้งเตือนตอนกดเริ่ม (ต้องมาจากการแตะของผู้ใช้) แล้วค่อยเริ่มจับ */
   const begin = (simulated: boolean) => {
     if (notificationPermission() === 'default') void requestNotificationPermission()
-    start(simulated, geo.position ?? undefined)
+    start(simulated, geo.position ?? undefined, inviteParam)
   }
+
+  // ระยะต่ำกว่านี้ถือว่ายังไม่ได้วิ่ง (GPS ยังไม่นิ่ง หรือกดจบเร็วไป) จะแสดงเหตุผลแทนการบันทึก
+  const MIN_SAVE_M = 10
+  const tooShort = !!summary && summary.distanceM < MIN_SAVE_M
 
   const finish = () => {
     stop()
-    if (tracker.distanceM < 10) {
-      reset()
-      return
-    }
+    // แสดงสรุปเสมอ — ก่อนหน้านี้ระยะสั้นจะรีเซ็ตเงียบ ๆ ทำให้เหมือนหน้าจอหายไปเฉย ๆ
     const run: RunSession = {
       id: uid('rn_'),
       startedAt: tracker.path[0]?.t ?? Date.now() - tracker.elapsedMs,
@@ -81,7 +59,13 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
     <>
       <TopBar
         title={tracker.running ? (tracker.paused ? 'พักอยู่' : 'กำลังวิ่ง') : 'จับระยะทาง'}
-        subtitle={invite ? `นัด: ${invite.title} · ${invite.place.name}` : 'GPS จะเริ่มบันทึกเมื่อกดเริ่ม'}
+        subtitle={
+          invite
+            ? `นัด: ${invite.title} · ${invite.place.name}`
+            : tracker.running
+              ? 'ไปหน้าอื่นได้ การวิ่งจะยังนับต่อ'
+              : 'GPS จะเริ่มบันทึกเมื่อกดเริ่ม'
+        }
         onBack={tracker.running ? undefined : () => nav('home')}
       />
 
@@ -226,10 +210,46 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
         </button>
       </Sheet>
 
-      <Sheet open={!!summary} title="จบกิจกรรมแล้ว 🎉" subtitle="ดูสรุปแล้วบันทึกเก็บไว้ได้เลย" onClose={() => setSummary(null)}>
-        {summary && (
+      <Sheet
+        open={!!summary}
+        title={tooShort ? 'ยังไม่ได้ระยะทาง' : 'จบกิจกรรมแล้ว 🎉'}
+        subtitle={tooShort ? `ได้ไม่ถึง ${MIN_SAVE_M} เมตร จึงยังบันทึกไม่ได้` : 'ดูสรุปแล้วบันทึกเก็บไว้ได้เลย'}
+        onClose={() => {
+          setSummary(null)
+          if (tooShort) reset()
+        }}
+      >
+        {summary && tooShort && (
           <>
-            <Map center={summary.path[0] ?? center} zoom={16} fit={boundsOf(summary.path)} track={summary.path} />
+            <div className="card tight small" style={{ lineHeight: 1.7 }}>
+              จับได้ <b>{Math.round(summary.distanceM)} ม.</b> ใน {formatDuration(summary.movingMs)}
+              {tracker.accuracy != null && tracker.accuracy > 40 && (
+                <>
+                  <br />
+                  GPS ยังไม่แม่น (±{Math.round(tracker.accuracy)} ม.) — จุดที่คลาดเกิน 40 ม. จะไม่ถูกนับ
+                </>
+              )}
+              <br />
+              ลองออกไปที่โล่ง รอให้ขึ้น "GPS ±20 ม." ก่อนกดเริ่ม แล้ววิ่งอย่างน้อยสักสิบเมตร
+              หรือใช้โหมดจำลองเพื่อทดลองแอปในอาคาร
+            </div>
+            <button
+              className="btn primary block"
+              style={{ marginTop: 14 }}
+              onClick={() => {
+                setSummary(null)
+                reset()
+              }}
+            >
+              เข้าใจแล้ว
+            </button>
+          </>
+        )}
+        {summary && !tooShort && (
+          <>
+            {summary.path.length > 1 && (
+              <Map center={summary.path[0] ?? center} zoom={16} fit={boundsOf(summary.path)} track={summary.path} />
+            )}
             <div className="card" style={{ marginTop: 12 }}>
               <div className="stat-grid">
                 <div className="stat">

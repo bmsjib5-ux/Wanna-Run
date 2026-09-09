@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
@@ -16,7 +16,13 @@ import type { RunSession } from '../types'
 
 const AVATARS = ['🏃', '🦊', '🐼', '🐯', '🦄', '🐧', '🐨', '🐸', '🦁', '🐰', '🐻', '🐙']
 
-export default function Profile({ nav }: { nav: Nav }) {
+export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }) {
+  const runsRef = useRef<HTMLDivElement>(null)
+  // มาจากทางลัด "ประวัติการวิ่ง" ให้เลื่อนไปที่รายการเลย
+  useEffect(() => {
+    if (section === 'runs') runsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [section])
+
   const { state, actions, cloud } = useStore()
   const { profile, runs } = state
   const [editing, setEditing] = useState(false)
@@ -161,7 +167,9 @@ export default function Profile({ nav }: { nav: Nav }) {
         )}
       </div>
 
-      <div className="section-title">ประวัติการวิ่ง ({runs.length})</div>
+      <div className="section-title" ref={runsRef} style={{ scrollMarginTop: 12 }}>
+        ประวัติการวิ่ง ({runs.length})
+      </div>
       {runs.length === 0 ? (
         <div className="card empty">
           <div className="big">🏁</div>
