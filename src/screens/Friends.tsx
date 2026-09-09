@@ -164,7 +164,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
       {mine.length === 0 ? (
         <div className="card empty">
           <div className="big">👟</div>
-          ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> ให้เพื่อน
+          ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent-text)' }}>{state.profile.code}</b> ให้เพื่อน
           หรือขอรหัสเขามากรอกก็ได้
           <div className="row" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
             <button className="btn primary sm" onClick={() => { setAddOpen(true); setScanning(true) }}>
@@ -250,7 +250,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
               ส่งคำขอเป็นเพื่อน
             </button>
             <div className="card tight muted small" style={{ marginTop: 14, lineHeight: 1.65 }}>
-              รหัสของคุณคือ <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> — กดปุ่ม QR ด้านบนให้เพื่อนสแกนก็ได้
+              รหัสของคุณคือ <b style={{ color: 'var(--accent-text)' }}>{state.profile.code}</b> — กดปุ่ม QR ด้านบนให้เพื่อนสแกนก็ได้
             </div>
           </>
         )}

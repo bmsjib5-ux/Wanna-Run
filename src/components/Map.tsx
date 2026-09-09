@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import L, { type DivIcon } from 'leaflet'
 import type { LatLng } from '../types'
 
@@ -106,11 +106,18 @@ export default function Map({
         attributionControl
         scrollWheelZoom
       >
+        {/*
+          ใช้ tile มาตรฐานของ OpenStreetMap: มีชื่อถนนและสถานที่ภาษาไทยครบ
+          หน้าตาใกล้เคียง Google Maps และไม่ต้องมี API key
+          (CARTO ที่ใช้เดิมเปลี่ยนนโยบายให้ต้องมีคีย์ ไม่งั้นแปะลายน้ำทับแผนที่)
+          นโยบายของ OSM ขอให้ใส่ที่มาและไม่ดึงจำนวนมหาศาล เหมาะกับแอปขนาดเล็ก
+        */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; OpenStreetMap &copy; CARTO'
-          maxZoom={20}
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          maxZoom={19}
         />
+        <ZoomControl position="bottomright" />
         {line.length > 1 && <Polyline positions={line} pathOptions={{ color: '#c6f24e', weight: 5, opacity: 0.95 }} />}
         {pins.map((p) => (
           <Marker key={p.id} position={[p.pos.lat, p.pos.lng]} icon={icon(p)} />

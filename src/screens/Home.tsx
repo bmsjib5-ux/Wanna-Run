@@ -71,7 +71,7 @@ export default function Home({ nav }: { nav: Nav }) {
         </div>
       )}
 
-      <div className="card" style={{ background: 'linear-gradient(150deg, #1c2a1a, #161f2c 60%)' }}>
+      <div className="card" style={{ background: 'linear-gradient(150deg, rgba(var(--accent-rgb), .16), var(--surface) 62%)' }}>
         <div className="row">
           <div className="grow">
             <div className="row" style={{ gap: 8 }}>

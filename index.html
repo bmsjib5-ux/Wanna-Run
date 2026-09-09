@@ -12,6 +12,18 @@
       content="ชวนเพื่อนวิ่ง สร้างก๊วน นัดสถานที่ แชร์ตำแหน่งแบบสด จับระยะทางด้วย GPS พร้อมภารกิจและมินิเกม"
     />
     <meta name="theme-color" content="#0b0f14" />
+    <script>
+      // ตั้งธีมที่ผู้ใช้เลือกไว้ตั้งแต่ก่อนโหลดแอป ไม่งั้นหน้าจะกะพริบจากธีมเริ่มต้นไปธีมที่เลือก
+      try {
+        var t = JSON.parse(localStorage.getItem('wanna-run.theme') || '{}');
+        var mode = t.mode === 'system'
+          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : (t.mode === 'light' ? 'light' : 'dark');
+        document.documentElement.dataset.theme = mode;
+        if (t.accent) document.documentElement.dataset.accent = t.accent;
+        if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#f3f6fa';
+      } catch (e) {}
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

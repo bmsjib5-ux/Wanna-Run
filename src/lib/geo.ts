@@ -79,3 +79,13 @@ export function boundsOf(points: LatLng[]): [[number, number], [number, number]]
     [maxLat + pad, maxLng + pad],
   ]
 }
+
+/**
+ * ลิงก์เปิดการนำทางใน Google Maps — บนมือถือจะเด้งเข้าแอป Google Maps ถ้าติดตั้งไว้
+ * ไม่งั้นเปิดเว็บ ใช้ระบบนำทางเต็มรูปแบบของเขาได้เลยโดยไม่ต้องจ่ายค่า API
+ */
+export function directionsUrl(to: LatLng): string {
+  const dest = `${to.lat.toFixed(6)},${to.lng.toFixed(6)}`
+  const params = new URLSearchParams({ api: '1', destination: dest, travelmode: 'walking' })
+  return `https://www.google.com/maps/dir/?${params.toString()}`
+}
