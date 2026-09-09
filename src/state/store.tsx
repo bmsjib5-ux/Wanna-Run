@@ -50,6 +50,7 @@ function load(userId: string | null): AppState {
     const rolled = rollover(parsed.counters ?? emptyCounters())
     return {
       ...withCounters(parsed),
+      spots: parsed.spots ?? [],
       counters: rolled ?? parsed.counters,
       missions: rolled
         ? parsed.missions.map((m) => ({ ...m, claimed: m.period === 'season' ? m.claimed : false }))
@@ -119,6 +120,10 @@ type Actions = {
 
   toggleShareLocation: (on: boolean) => void
 
+  /** บันทึกจุดวิ่งประจำ (ตั้งชื่อใหม่ได้) คืน id ของจุดที่บันทึก */
+  addSpot: (place: Place, name?: string) => ID
+  removeSpot: (spotId: ID) => void
+
   claimMission: (missionId: ID) => void
   recordGame: (game: GameKey, score: number, coins: number, xp: number) => void
   markSpun: () => void
@@ -177,11 +182,12 @@ export function StoreProvider({
     if (!cloudRef.current) return
     const local = stateRef.current.profile
     // ใช้ allSettled เพื่อให้ส่วนที่ดึงสำเร็จยังแสดงได้ แม้บางส่วนจะพลาด
-    const [profileR, friendsR, groupsR, invitesR] = await Promise.allSettled([
+    const [profileR, friendsR, groupsR, invitesR, spotsR] = await Promise.allSettled([
       api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
       api.fetchFriends(),
       api.fetchGroups(),
       api.fetchInvites(),
+      api.fetchSpots(),
     ])
 
     for (const [what, result] of [
@@ -189,6 +195,7 @@ export function StoreProvider({
       ['เพื่อน', friendsR],
       ['กลุ่ม', groupsR],
       ['นัดวิ่ง', invitesR],
+      ['จุดวิ่งประจำ', spotsR],
     ] as const) {
       if (result.status === 'rejected') console.error(`ดึงข้อมูล${what}ไม่สำเร็จ`, result.reason)
     }
@@ -200,6 +207,7 @@ export function StoreProvider({
       friends: friendsR.status === 'fulfilled' ? friendsR.value : s.friends,
       groups: groupsR.status === 'fulfilled' ? groupsR.value : s.groups,
       invites: invitesR.status === 'fulfilled' ? invitesR.value : s.invites,
+      spots: spotsR.status === 'fulfilled' ? spotsR.value : s.spots,
     }))
     setSyncing(false)
   }, [])
@@ -222,31 +230,16 @@ export function StoreProvider({
         setState((s) => {
           const friend = s.friends.find((f) => f.id === row.id)
           if (!friend) return s
-          const seenAt = api.heartbeatOnly(row, friend)
-          if (seenAt === null) return s
+          const seen = api.heartbeatOnly(row, friend)
+          if (seen === null) return s
           patched = true
-          if (seenAt === friend.lastActiveAt) return s
-          return { ...s, friends: s.friends.map((f) => (f.id === row.id ? { ...f, lastActiveAt: seenAt } : f)) }
+          if (seen.lastActiveAt === friend.lastActiveAt && seen.online === friend.online) return s
+          return { ...s, friends: s.friends.map((f) => (f.id === row.id ? { ...f, ...seen } : f)) }
         })
         if (patched) return
       }
       void refresh()
     })
-
-    // heartbeat บอกเพื่อนว่ายังออนไลน์ ส่งตอนเปิดอยู่ และยิงครั้งสุดท้ายตอนถูกย่อ
-    // (เบราว์เซอร์มือถือหยุด JS ของแท็บเบื้องหลัง จึงสัญญาว่าออนไลน์ต่อไม่ได้)
-    const beat = (keepalive = false) => api.touchPresence(keepalive).catch(() => undefined)
-    void beat()
-    const heart = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void beat()
-    }, HEARTBEAT_MS)
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') void beat(true)
-      else void beat()
-    }
-    document.addEventListener('visibilitychange', onHide)
-    const onLeave = () => void beat(true)
-    window.addEventListener('pagehide', onLeave)
 
     // Realtime ผ่าน websocket อาจต่อไม่ได้ (เน็ตองค์กร พร็อกซี มือถือสลับสัญญาณ)
     // จึงถามซ้ำเป็นระยะและตอนกลับมาโฟกัสหน้าจอ เพื่อไม่ให้ข้อมูลค้างเมื่อ websocket หลุด
@@ -256,6 +249,21 @@ export function StoreProvider({
     }
     document.addEventListener('visibilitychange', onWake)
     window.addEventListener('focus', onWake)
+
+    // heartbeat บอกเพื่อนว่ายังออนไลน์ ส่งตอนเปิดอยู่ และบอกลา (online=false) ทันทีตอนถูกย่อ/ปิด
+    // (เบราว์เซอร์มือถือหยุด JS ของแท็บเบื้องหลัง จึงสัญญาว่าออนไลน์ต่อไม่ได้)
+    const beat = (online: boolean, keepalive = false) => api.touchPresence(online, keepalive).catch(() => undefined)
+    void beat(true)
+    const heart = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void beat(true)
+    }, HEARTBEAT_MS)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void beat(false, true)
+      else void beat(true)
+    }
+    const onLeave = () => void beat(false, true)
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', onLeave)
 
     return () => {
       unsubscribe()
@@ -601,6 +609,23 @@ export function StoreProvider({
             goto: 'map',
           })
         }
+      },
+
+      addSpot: (place, name) => {
+        const spot: Place = {
+          ...place,
+          id: cloudRef.current ? api.newId() : uid('sp_'),
+          name: (name ?? place.name).trim() || place.name,
+          tags: ['จุดประจำ'],
+        }
+        patch((s) => ({ ...s, spots: [spot, ...s.spots.filter((x) => x.id !== spot.id)] }))
+        if (cloudRef.current) remote(() => api.createSpotRemote(spot))
+        return spot.id
+      },
+
+      removeSpot: (spotId) => {
+        patch((s) => ({ ...s, spots: s.spots.filter((x) => x.id !== spotId) }))
+        if (cloudRef.current) remote(() => api.deleteSpotRemote(spotId))
       },
 
       claimMission: (missionId) =>

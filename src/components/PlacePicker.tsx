@@ -5,6 +5,7 @@ import { PLACES } from '../lib/seed'
 import { useCurrentPosition } from '../lib/useGeo'
 import { distanceM } from '../lib/geo'
 import { uid } from '../lib/id'
+import { useStore } from '../state/store'
 import type { LatLng, Place } from '../types'
 
 type Props = {
@@ -19,14 +20,19 @@ export default function PlacePicker({ open, onClose, onSelect }: Props) {
   const [picked, setPicked] = useState<LatLng | null>(null)
   const [customName, setCustomName] = useState('')
   const geo = useCurrentPosition(open)
+  const { state } = useStore()
 
+  const q = query.trim()
+  const spots = useMemo(
+    () => (q ? state.spots.filter((p) => p.name.includes(q) || p.area.includes(q)) : state.spots),
+    [q, state.spots],
+  )
   const places = useMemo(() => {
-    const q = query.trim()
     const list = q ? PLACES.filter((p) => p.name.includes(q) || p.area.includes(q) || p.tags.some((t) => t.includes(q))) : PLACES
     if (!geo.position) return list
     const here = geo.position
     return [...list].sort((a, b) => distanceM(here, a) - distanceM(here, b))
-  }, [query, geo.position])
+  }, [q, geo.position])
 
   const useHere = () => {
     if (!geo.position) return
@@ -71,6 +77,36 @@ export default function PlacePicker({ open, onClose, onSelect }: Props) {
               </span>
             </span>
           </button>
+
+          {spots.length > 0 && (
+            <>
+              <div className="section-title">⭐ จุดวิ่งประจำของฉัน</div>
+              <div className="stack-8">
+                {spots.map((p) => (
+                  <button
+                    key={p.id}
+                    className="list-btn"
+                    onClick={() => {
+                      onSelect(p)
+                      onClose()
+                    }}
+                  >
+                    <span className="avatar">⭐</span>
+                    <span className="grow">
+                      <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+                        {p.name}
+                      </span>
+                      <span className="muted small truncate" style={{ display: 'block' }}>
+                        {p.area || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`}
+                        {geo.position ? ` · ห่าง ${(distanceM(geo.position, p) / 1000).toFixed(1)} กม.` : ''}
+                      </span>
+                    </span>
+                    <span className="muted">›</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="section-title">สวนและลู่วิ่งยอดนิยม</div>
           <div className="stack-8">
