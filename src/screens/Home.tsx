@@ -4,7 +4,8 @@ import TopBar from '../components/TopBar'
 import InviteCard from '../components/InviteCard'
 import Avatar from '../components/Avatar'
 import { levelOf, missionsWithProgress, useStore } from '../state/store'
-import { startOfWeek } from '../lib/format'
+import { agoLabel, startOfWeek } from '../lib/format'
+import { formatDuration, formatKm } from '../lib/geo'
 import { isOnline, useNow } from '../lib/presence'
 
 export default function Home({ nav }: { nav: Nav }) {
@@ -38,6 +39,7 @@ export default function Home({ nav }: { nav: Nav }) {
   const online = friends.filter((f) => f.status === 'friend' && isOnline(f, now))
   const sharing = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
   const pending = friends.filter((f) => f.status === 'incoming').length
+  const lastRun = state.runs[0]
 
   const goalPct = Math.min(100, (weekKm / Math.max(1, profile.weeklyGoalKm)) * 100)
 
@@ -147,6 +149,21 @@ export default function Home({ nav }: { nav: Nav }) {
               กลุ่มวิ่ง
             </span>
             <span className="muted small">{state.groups.length} กลุ่ม · นัดทั้งก๊วนได้ในคลิกเดียว</span>
+          </span>
+          <span className="muted">›</span>
+        </button>
+
+        <button className="list-btn" onClick={() => nav('profile', { section: 'runs' })}>
+          <span className="avatar">🏁</span>
+          <span className="grow">
+            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+              ประวัติการวิ่ง
+            </span>
+            <span className="muted small">
+              {lastRun
+                ? `${state.runs.length} ครั้ง · ล่าสุด ${formatKm(lastRun.distanceM)} กม. ${formatDuration(lastRun.movingMs)} · ${agoLabel(lastRun.startedAt)}`
+                : 'ยังไม่มีกิจกรรม — ออกไปวิ่งครั้งแรกกันเถอะ'}
+            </span>
           </span>
           <span className="muted">›</span>
         </button>
