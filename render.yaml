@@ -9,6 +9,13 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # sync:false = ให้กรอกค่าในแดชบอร์ด และ Render จะไม่ล้างทิ้งตอน sync blueprint
+      # ถ้าไม่ประกาศไว้ตรงนี้ ค่าที่ใส่ในแดชบอร์ดอาจหายไปตอน deploy รอบถัดไป
+      # Vite ฝังค่าลงไฟล์ตอน build จึงต้องมีอยู่ตั้งแต่ตอน build ไม่ใช่ตอนรัน
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
     headers:
       # service worker ต้องไม่ถูกแคช ไม่งั้นผู้ใช้จะค้างอยู่กับเวอร์ชันเก่า
       - path: /sw.js

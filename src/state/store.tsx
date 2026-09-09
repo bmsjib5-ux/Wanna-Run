@@ -27,7 +27,7 @@ import { bump, emptyCounters, rollover } from '../lib/counters'
 import { normalizeCode, uid } from '../lib/id'
 import { pushNotice } from '../lib/notify'
 import { blobToDataUrl, squareThumbnail } from '../lib/image'
-import { isCloudConfigured } from '../lib/supabase'
+import { describeAuthError, isCloudConfigured } from '../lib/supabase'
 import * as api from '../lib/api'
 
 const STORAGE_PREFIX = 'wanna-run.state.v1'
@@ -88,7 +88,7 @@ type Actions = {
   completeOnboarding: (name: string, emoji: string, weeklyGoalKm: number, photo?: File) => void
   setAvatar: (file: File) => Promise<void>
   clearAvatar: () => Promise<void>
-  updateProfile: (patch: Partial<AppState['profile']>) => void
+  updateProfile: (patch: Partial<AppState['profile']>) => Promise<void>
   resetAll: () => void
 
   addFriendByCode: (code: string) => { ok: boolean; message: string }
@@ -132,7 +132,6 @@ type Ctx = { state: AppState; actions: Actions; cloud: boolean; syncing: boolean
 const StoreContext = createContext<Ctx | null>(null)
 
 const AVATARS = ['🦊', '🐼', '🐰', '🐧', '🐨', '🐻', '🐥', '🦁', '🦄', '🐯', '🐸', '🐙']
-const NAMES = ['นักวิ่งลึกลับ', 'เพื่อนใหม่', 'สายลมเช้า', 'ขาแรง', 'เพซเมกเกอร์', 'รันเนอร์']
 
 function hash(str: string): number {
   let h = 0
@@ -308,9 +307,18 @@ export function StoreProvider({
         patch((s) => ({ ...s, profile: { ...s.profile, avatarUrl: undefined } }))
       },
 
-      updateProfile: (p) => {
+      updateProfile: async (p) => {
+        const before = stateRef.current.profile
         patch((s) => ({ ...s, profile: { ...s.profile, ...p } }))
-        if (cloudRef.current) void api.updateMyProfile(p).catch(console.error)
+        if (!cloudRef.current) return
+        try {
+          await api.updateMyProfile(p)
+        } catch (err) {
+          // เซิร์ฟเวอร์ไม่รับ (เช่น ชื่อซ้ำ) ย้อนเฉพาะฟิลด์ที่เพิ่งแก้กลับเป็นค่าเดิม
+          const revert = Object.fromEntries(Object.keys(p).map((k) => [k, before[k as keyof typeof before]]))
+          patch((s) => ({ ...s, profile: { ...s.profile, ...revert } }))
+          throw new Error(describeAuthError((err as Error).message))
+        }
       },
 
       resetAll: () => {
@@ -347,14 +355,16 @@ export function StoreProvider({
           return { ok: true, message: `ส่งคำขอถึง ${existing.name} แล้ว` }
         }
 
+        // ไม่มีเซิร์ฟเวอร์กลางจึงดึงชื่อจริงของเจ้าของรหัสมาไม่ได้
+        // ใช้ตัวรหัสเป็นชื่อไปเลย ดีกว่าตั้งชื่อสุ่มที่ทำให้เข้าใจผิดว่าเป็นคนนั้นจริง ๆ
         const h = hash(code)
         const invented: Friend = {
           id: uid('fr_'),
-          name: NAMES[h % NAMES.length],
+          name: code,
           emoji: AVATARS[(h >> 3) % AVATARS.length],
           code,
           status: 'outgoing',
-          bio: 'เพิ่มผ่านรหัสเพื่อน',
+          bio: 'เพิ่มด้วยรหัสในโหมดทดลอง — ยังไม่ได้เชื่อมเซิร์ฟเวอร์',
           totalKm: 20 + (h % 400),
           avgPaceSec: 280 + (h % 220),
           home: { lat: 13.7305 + ((h % 100) - 50) / 5000, lng: 100.5418 + ((h % 71) - 35) / 5000 },

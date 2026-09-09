@@ -32,6 +32,9 @@ create table if not exists public.friendships (
   constraint friendship_not_self check (requester <> addressee),
   constraint friendship_unique_pair unique (requester, addressee)
 );
+-- ชื่อนักวิ่งห้ามซ้ำ เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็ก
+create unique index if not exists profiles_name_lower_key on public.profiles (lower(name));
+
 create index if not exists friendships_addressee_idx on public.friendships (addressee, status);
 create index if not exists friendships_requester_idx on public.friendships (requester, status);
 

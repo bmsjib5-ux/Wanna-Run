@@ -112,6 +112,13 @@ export async function createMyProfile(
   return toProfile(row, local)
 }
 
+/** เช็คว่าชื่อนี้ยังว่างอยู่ไหม (ไม่นับชื่อเดิมของตัวเอง) */
+export async function isNameAvailable(name: string): Promise<boolean> {
+  const { data, error } = await requireSupabase().rpc('is_name_available', { p_name: name })
+  if (error) throw error
+  return data === true
+}
+
 export async function updateMyProfile(patch: Partial<Profile>): Promise<void> {
   const uid = await currentUserId()
   if (!uid) return

@@ -10,6 +10,7 @@ import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { shortDate, startOfWeek, whenLabel } from '../lib/format'
 import { notificationPermission, requestNotificationPermission } from '../lib/notify'
+import { nameHint, useNameCheck } from '../lib/useNameCheck'
 import type { RunSession } from '../types'
 
 const AVATARS = ['🏃', '🦊', '🐼', '🐯', '🦄', '🐧', '🐨', '🐸', '🦁', '🐰', '🐻', '🐙']
@@ -21,6 +22,32 @@ export default function Profile({ nav }: { nav: Nav }) {
   const [detail, setDetail] = useState<RunSession | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
   const [perm, setPerm] = useState(notificationPermission())
+  // แก้ชื่อในสถานะชั่วคราวก่อน แล้วค่อยบันทึกทีเดียว
+  // ของเดิมยิงอัปเดตขึ้นเซิร์ฟเวอร์ทุกตัวอักษรที่พิมพ์
+  const [draftName, setDraftName] = useState(profile.name)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const nameState = useNameCheck(draftName, profile.name)
+  const hint = nameHint(nameState)
+
+  const openEditor = () => {
+    setDraftName(profile.name)
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  const saveName = async () => {
+    const value = draftName.trim()
+    if (!value || value === profile.name) {
+      setEditing(false)
+      return
+    }
+    try {
+      await actions.updateProfile({ name: value })
+      setEditing(false)
+    } catch (err) {
+      setSaveError((err as Error).message || 'บันทึกชื่อไม่สำเร็จ')
+    }
+  }
 
   const lvl = levelOf(profile.xp)
   const totals = useMemo(() => {
@@ -44,7 +71,7 @@ export default function Profile({ nav }: { nav: Nav }) {
         subtitle={profile.code}
         onBack={() => nav('home')}
         right={
-          <button className="btn sm" onClick={() => setEditing(true)}>
+          <button className="btn sm" onClick={openEditor}>
             แก้ไข
           </button>
         }
@@ -52,7 +79,7 @@ export default function Profile({ nav }: { nav: Nav }) {
 
       <div className="card center">
         <button
-          onClick={() => setEditing(true)}
+          onClick={openEditor}
           aria-label="แก้ไขข้อมูลส่วนตัว"
           style={{ position: 'relative', display: 'inline-grid', placeItems: 'center' }}
         >
@@ -191,7 +218,27 @@ export default function Profile({ nav }: { nav: Nav }) {
 
         <label className="field">
           <span>ชื่อ</span>
-          <input value={profile.name} onChange={(e) => actions.updateProfile({ name: e.target.value })} maxLength={24} />
+          <input
+            value={draftName}
+            onChange={(e) => {
+              setDraftName(e.target.value)
+              setSaveError(null)
+            }}
+            maxLength={24}
+            style={nameState === 'taken' ? { borderColor: 'var(--danger)' } : undefined}
+          />
+          {hint && (
+            <span
+              className="tiny"
+              style={{
+                display: 'block',
+                marginTop: 6,
+                color: hint.tone === 'ok' ? 'var(--ok)' : hint.tone === 'bad' ? 'var(--danger)' : 'var(--muted)',
+              }}
+            >
+              {hint.text}
+            </span>
+          )}
         </label>
         <div className="field">
           <span>อิโมจิ {profile.avatarUrl && <span className="muted">(ใช้เมื่อไม่มีรูป)</span>}</span>
@@ -200,7 +247,7 @@ export default function Profile({ nav }: { nav: Nav }) {
               <button
                 key={a}
                 className="avatar sm"
-                onClick={() => actions.updateProfile({ emoji: a })}
+                onClick={() => void actions.updateProfile({ emoji: a }).catch(() => {})}
                 style={{
                   borderColor: profile.emoji === a ? 'var(--accent)' : 'var(--line)',
                   background: profile.emoji === a ? 'rgba(198,242,78,.14)' : 'var(--surface-2)',
@@ -219,10 +266,19 @@ export default function Profile({ nav }: { nav: Nav }) {
             max={80}
             step={5}
             value={profile.weeklyGoalKm}
-            onChange={(e) => actions.updateProfile({ weeklyGoalKm: Number(e.target.value) })}
+            onChange={(e) => void actions.updateProfile({ weeklyGoalKm: Number(e.target.value) }).catch(() => {})}
           />
         </label>
-        <button className="btn primary block" onClick={() => setEditing(false)}>
+        {saveError && (
+          <div className="small" style={{ color: 'var(--danger)', marginBottom: 12 }}>
+            {saveError}
+          </div>
+        )}
+        <button
+          className="btn primary block"
+          onClick={() => void saveName()}
+          disabled={!draftName.trim() || nameState === 'taken' || nameState === 'checking'}
+        >
           เสร็จสิ้น
         </button>
       </Sheet>
