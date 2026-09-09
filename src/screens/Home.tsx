@@ -3,7 +3,6 @@ import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import InviteCard from '../components/InviteCard'
 import Avatar from '../components/Avatar'
-import { IconBell, IconFriends, IconGroup, IconMap, IconMegaphone, IconRun, IconTarget } from '../components/Icons'
 import { levelOf, missionsWithProgress, useStore } from '../state/store'
 import { startOfWeek } from '../lib/format'
 
@@ -56,7 +55,7 @@ export default function Home({ nav }: { nav: Nav }) {
             onClick={() => nav('notifications')}
             aria-label="การแจ้งเตือน"
           >
-            <IconBell size={20} />
+            🔔
             {unread > 0 && <span className="badge-dot">{unread}</span>}
           </button>
         }
@@ -89,10 +88,10 @@ export default function Home({ nav }: { nav: Nav }) {
         </div>
         <div className="row" style={{ marginTop: 14, gap: 8 }}>
           <button className="btn primary grow" onClick={() => nav('invites', { new: '1' })}>
-            <IconMegaphone size={18} /> ชวนเพื่อนวิ่ง
+            📣 ชวนเพื่อนวิ่ง
           </button>
           <button className="btn grow" onClick={() => nav('run')}>
-            <IconRun size={18} /> เริ่มวิ่งเลย
+            🏃 เริ่มวิ่งเลย
           </button>
         </div>
       </div>
@@ -124,9 +123,7 @@ export default function Home({ nav }: { nav: Nav }) {
       <div className="section-title">ทางลัด</div>
       <div className="stack-8">
         <button className="list-btn" onClick={() => nav('friends')}>
-          <span className="tile">
-            <IconFriends size={22} />
-          </span>
+          <span className="avatar">👟</span>
           <span className="grow">
             <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
               เพื่อนนักวิ่ง
@@ -141,9 +138,7 @@ export default function Home({ nav }: { nav: Nav }) {
         </button>
 
         <button className="list-btn" onClick={() => nav('groups')}>
-          <span className="tile">
-            <IconGroup size={22} />
-          </span>
+          <span className="avatar">👥</span>
           <span className="grow">
             <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
               กลุ่มวิ่ง
@@ -154,9 +149,7 @@ export default function Home({ nav }: { nav: Nav }) {
         </button>
 
         <button className="list-btn" onClick={() => nav('map')}>
-          <span className="tile">
-            <IconMap size={22} />
-          </span>
+          <span className="avatar">🗺️</span>
           <span className="grow">
             <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
               แผนที่เพื่อน
@@ -169,9 +162,7 @@ export default function Home({ nav }: { nav: Nav }) {
         </button>
 
         <button className="list-btn" onClick={() => nav('games')}>
-          <span className="tile">
-            <IconTarget size={22} />
-          </span>
+          <span className="avatar">🎯</span>
           <span className="grow">
             <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
               ภารกิจวันนี้

@@ -15,7 +15,6 @@ import LiveMap from './screens/LiveMap'
 import Games from './screens/Games'
 import Profile from './screens/Profile'
 import Notifications from './screens/Notifications'
-import { IconFriends, IconHome, IconMap, IconRun, IconTarget } from './components/Icons'
 
 export type Route =
   | 'home'
@@ -30,14 +29,12 @@ export type Route =
 
 export type Nav = (route: Route, params?: Record<string, string>) => void
 
-type TabIcon = (props: { size?: number }) => React.ReactElement
-
-const TABS: Array<{ key: Route; label: string; Icon: TabIcon }> = [
-  { key: 'home', label: 'หน้าหลัก', Icon: IconHome },
-  { key: 'friends', label: 'เพื่อน', Icon: IconFriends },
-  { key: 'run', label: 'วิ่ง', Icon: IconRun },
-  { key: 'map', label: 'แผนที่', Icon: IconMap },
-  { key: 'games', label: 'ภารกิจ', Icon: IconTarget },
+const TABS: Array<{ key: Route; label: string; icon: string }> = [
+  { key: 'home', label: 'หน้าหลัก', icon: '🏠' },
+  { key: 'friends', label: 'เพื่อน', icon: '👟' },
+  { key: 'run', label: 'วิ่ง', icon: '🏃' },
+  { key: 'map', label: 'แผนที่', icon: '🗺️' },
+  { key: 'games', label: 'ภารกิจ', icon: '🎮' },
 ]
 
 function Shell() {
@@ -85,26 +82,22 @@ function Shell() {
         {route === 'notifications' && <Notifications nav={nav} />}
       </main>
 
-      <nav className="nav" aria-label="เมนูหลัก">
-        {TABS.map(({ key, label, Icon }) =>
-          key === 'run' ? (
-            <button key={key} className="nav-item" onClick={() => nav('run')} aria-label="เริ่มวิ่ง">
-              <span className="fab">
-                <Icon size={26} />
-              </span>
+      <nav className="nav">
+        {TABS.map((t) =>
+          t.key === 'run' ? (
+            <button key={t.key} onClick={() => nav('run')} aria-label="เริ่มวิ่ง">
+              <span className="fab">🏃</span>
             </button>
           ) : (
             <button
-              key={key}
-              className={`nav-item${route === key ? ' on' : ''}`}
-              onClick={() => nav(key)}
-              aria-current={route === key ? 'page' : undefined}
+              key={t.key}
+              className={route === t.key ? 'on' : ''}
+              onClick={() => nav(t.key)}
+              style={{ position: 'relative' }}
             >
-              <span className="nav-card">
-                <Icon size={22} />
-                <span className="nav-label">{label}</span>
-                {key === 'home' && unread > 0 && <span className="badge-dot">{unread}</span>}
-              </span>
+              <span className="ico">{t.icon}</span>
+              <span>{t.label}</span>
+              {t.key === 'home' && unread > 0 && <span className="badge-dot">{unread}</span>}
             </button>
           ),
         )}
