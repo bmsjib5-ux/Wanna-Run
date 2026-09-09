@@ -35,7 +35,10 @@ export function describeAuthError(message: string): string {
   if (m.includes('password should be at least')) return 'รหัสผ่านสั้นเกินไป ต้องอย่างน้อย 6 ตัวอักษร'
   if (m.includes('email not confirmed')) return 'ยังไม่ได้ยืนยันอีเมล เช็กกล่องจดหมายก่อนนะ'
   if (m.includes('unable to validate email')) return 'รูปแบบอีเมลไม่ถูกต้อง'
-  if (m.includes('rate limit') || m.includes('too many')) return 'ลองบ่อยเกินไป รอสักครู่แล้วลองใหม่'
+  if (m.includes('email address') && m.includes('invalid')) return 'อีเมลนี้ใช้ไม่ได้ ลองใช้อีเมลจริงที่รับจดหมายได้'
+  if (m.includes('rate limit') || m.includes('too many') || m.includes('only request this after'))
+    return 'ขอบ่อยเกินไป รอสักครู่แล้วลองใหม่'
+  if (m.includes('same password')) return 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม'
   if (m.includes('profiles_name_lower_key') || m.includes('มีคนใช้แล้ว')) return 'ชื่อนี้มีคนใช้แล้ว ลองตั้งชื่ออื่นดูนะ'
   if (m.includes('failed to fetch') || m.includes('network')) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ เช็กอินเทอร์เน็ตก่อน'
   return message

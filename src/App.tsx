@@ -7,6 +7,7 @@ import { isCloudConfigured } from './lib/supabase'
 import { takeCodeFromUrl } from './lib/friendLink'
 import { takeSpotFromUrl } from './lib/spotLink'
 import Auth from './screens/Auth'
+import ResetPassword from './screens/ResetPassword'
 import Toaster from './components/Toaster'
 import Onboarding from './screens/Onboarding'
 import Home from './screens/Home'
@@ -165,9 +166,11 @@ function Splash({ text }: { text: string }) {
 }
 
 function CloudApp() {
-  const { session, loading } = useAuth()
+  const { session, loading, recovery } = useAuth()
 
   if (loading) return <Splash text="กำลังเชื่อมต่อ..." />
+  // มาจากลิงก์ในอีเมล ให้ตั้งรหัสใหม่ก่อนเข้าใช้งาน
+  if (recovery !== 'none') return <ResetPassword />
   if (!session) return <Auth />
 
   return (
