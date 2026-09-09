@@ -49,10 +49,7 @@ export function rollover(c: Counters): Counters | null {
 
 export function bump(c: Counters, metric: MissionMetric, amount: number): Counters {
   const next = rollover(c) ?? c
-  const add = (p: PeriodCounters): PeriodCounters => {
-    if (metric === 'gameScore') return { ...p, gameScore: Math.max(p.gameScore, 0) + amount }
-    return { ...p, [metric]: p[metric] + amount }
-  }
+  const add = (p: PeriodCounters): PeriodCounters => ({ ...p, [metric]: p[metric] + amount })
   return {
     ...next,
     daily: add(next.daily),

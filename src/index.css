@@ -249,10 +249,22 @@ a { color: var(--accent); }
 .toast .b { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
 /* ---------- แผนที่ ---------- */
-.map { height: 100%; width: 100%; border-radius: var(--radius); overflow: hidden; }
-.map-box { height: 260px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+/* isolation กันไม่ให้ z-index ภายในของ Leaflet (pane สูงถึง 800) ทะลุไปทับ sheet/nav/toast */
+.map { height: 100%; width: 100%; border-radius: var(--radius); overflow: hidden; isolation: isolate; }
+.map-box {
+  height: 260px; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--line);
+  position: relative; z-index: 0; isolation: isolate;
+}
 .map-full { height: calc(100dvh - var(--nav-h) - 128px); min-height: 340px; }
-.leaflet-container { background: #0e141c; font: inherit; }
+.leaflet-container {
+  font: inherit;
+  /* ตารางจาง ๆ ไว้เป็นพื้นหลัง เผื่อโหลด tile ไม่ได้จะได้ไม่เห็นเป็นกล่องดำเปล่า */
+  background:
+    linear-gradient(rgba(38,52,74,.5) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(38,52,74,.5) 1px, transparent 1px) 0 0 / 44px 44px,
+    #0e141c;
+}
 .leaflet-control-attribution { background: rgba(11,15,20,.7) !important; color: #7b8ca3 !important; font-size: 9px !important; }
 .leaflet-control-attribution a { color: #9fb2c9 !important; }
 .leaflet-bar a { background: var(--surface) !important; color: var(--text) !important; border-color: var(--line) !important; }

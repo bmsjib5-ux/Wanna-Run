@@ -41,10 +41,12 @@ export default function LiveMap({ nav }: { nav: Nav }) {
     return out
   }, [me, pings, friends, showPlaces, sharing, state.profile.emoji])
 
+  // เมื่อไม่ได้แสดงหมุดสวน ให้ซูมพอดีกับคุณและเพื่อนที่แชร์ตำแหน่ง
   const fit = useMemo(() => {
-    const pts = pins.filter((p) => p.me || !p.id.startsWith('l')).map((p) => p.pos)
-    return pts.length > 1 && !showPlaces ? boundsOf(pts) : null
-  }, [pins, showPlaces])
+    if (showPlaces) return null
+    const pts = [...(me ? [me] : []), ...pings.map((p) => p.pos)]
+    return pts.length > 1 ? boundsOf(pts) : null
+  }, [me, pings, showPlaces])
 
   const shareLink = () => {
     if (!me) {
