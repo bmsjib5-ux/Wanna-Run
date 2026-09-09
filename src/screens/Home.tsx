@@ -7,7 +7,7 @@ import { levelOf, missionsWithProgress, useStore } from '../state/store'
 import { startOfWeek } from '../lib/format'
 
 export default function Home({ nav }: { nav: Nav }) {
-  const { state } = useStore()
+  const { state, cloud } = useStore()
   const { profile, runs, invites, friends, notifications } = state
 
   const lvl = levelOf(profile.xp)
@@ -60,6 +60,16 @@ export default function Home({ nav }: { nav: Nav }) {
           </button>
         }
       />
+
+      {!cloud && (
+        <div className="card tight row" style={{ gap: 10, borderColor: 'rgba(255,196,77,.35)' }}>
+          <span>🧪</span>
+          <div className="grow tiny" style={{ lineHeight: 1.6 }}>
+            <b style={{ color: 'var(--warn)' }}>โหมดทดลอง</b> — ยังไม่ได้เชื่อมเซิร์ฟเวอร์
+            ข้อมูลอยู่ในเครื่องนี้เท่านั้น เพิ่มเพื่อนข้ามเครื่องและแชร์ตำแหน่งจริงยังใช้ไม่ได้
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ background: 'linear-gradient(150deg, #1c2a1a, #161f2c 60%)' }}>
         <div className="row">
