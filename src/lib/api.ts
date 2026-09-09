@@ -1,0 +1,488 @@
+import type {
+  Friend,
+  Group,
+  ID,
+  InviteReply,
+  LatLng,
+  Place,
+  Profile,
+  RunInvite,
+} from '../types'
+import { requireSupabase } from './supabase'
+import { squareThumbnail } from './image'
+
+/** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
+function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+/** แถวโปรไฟล์ตามที่เก็บในฐานข้อมูล */
+type ProfileRow = {
+  id: string
+  name: string
+  emoji: string
+  avatar_url?: string | null
+  code: string
+  bio: string
+  weekly_goal_km: number
+  total_km: number
+  avg_pace_sec: number | null
+  sharing_location: boolean
+  last_active_at: string
+  created_at: string
+}
+
+// ใช้ * แทนการไล่ชื่อคอลัมน์ เพื่อให้แอปยังทำงานได้แม้ฐานข้อมูลยังไม่มีคอลัมน์ใหม่
+// (เช่น avatar_url ก่อนรัน supabase/avatars.sql) แทนที่จะพังทั้งหน้าเพราะ 42703
+const PROFILE_COLS = '*'
+
+const BANGKOK: LatLng = { lat: 13.7305, lng: 100.5418 }
+
+function toProfile(row: ProfileRow, local: Pick<Profile, 'level' | 'xp' | 'coins'>): Profile {
+  return {
+    id: row.id,
+    name: row.name,
+    emoji: row.emoji,
+    avatarUrl: row.avatar_url ?? undefined,
+    code: row.code,
+    weeklyGoalKm: row.weekly_goal_km,
+    sharingLocation: row.sharing_location,
+    createdAt: new Date(row.created_at).getTime(),
+    ...local,
+  }
+}
+
+function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Friend {
+  return {
+    id: row.id,
+    name: row.name,
+    emoji: row.emoji,
+    avatarUrl: row.avatar_url ?? undefined,
+    code: row.code,
+    status,
+    bio: row.bio ?? '',
+    totalKm: Math.round(Number(row.total_km ?? 0)),
+    avgPaceSec: row.avg_pace_sec ?? 360,
+    home,
+    sharingLocation: row.sharing_location,
+    lastActiveAt: new Date(row.last_active_at).getTime(),
+  }
+}
+
+/** id ของผู้ใช้ที่ล็อกอินอยู่ */
+export async function currentUserId(): Promise<string | null> {
+  const { data } = await requireSupabase().auth.getUser()
+  return data.user?.id ?? null
+}
+
+// ---------- โปรไฟล์ ----------
+
+export async function fetchMyProfile(
+  local: Pick<Profile, 'level' | 'xp' | 'coins'>,
+): Promise<Profile | null> {
+  const uid = await currentUserId()
+  if (!uid) return null
+  const { data, error } = await requireSupabase()
+    .from('profiles')
+    .select(PROFILE_COLS)
+    .eq('id', uid)
+    .maybeSingle()
+  if (error) throw error
+  return data ? toProfile(data as ProfileRow, local) : null
+}
+
+export async function createMyProfile(
+  name: string,
+  emoji: string,
+  weeklyGoalKm: number,
+  local: Pick<Profile, 'level' | 'xp' | 'coins'>,
+): Promise<Profile> {
+  const { data, error } = await requireSupabase().rpc('create_my_profile', {
+    p_name: name,
+    p_emoji: emoji,
+    p_goal_km: weeklyGoalKm,
+  })
+  if (error) throw error
+  const row = (Array.isArray(data) ? data[0] : data) as ProfileRow
+  return toProfile(row, local)
+}
+
+export async function updateMyProfile(patch: Partial<Profile>): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const row: Record<string, unknown> = { last_active_at: new Date().toISOString() }
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.emoji !== undefined) row.emoji = patch.emoji
+  if (patch.avatarUrl !== undefined) row.avatar_url = patch.avatarUrl ?? null
+  if (patch.weeklyGoalKm !== undefined) row.weekly_goal_km = patch.weeklyGoalKm
+  if (patch.sharingLocation !== undefined) row.sharing_location = patch.sharingLocation
+  const { error } = await requireSupabase().from('profiles').update(row).eq('id', uid)
+  if (error) throw error
+}
+
+export async function updateMyStats(totalKm: number, avgPaceSec: number | null): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  await requireSupabase()
+    .from('profiles')
+    .update({ total_km: totalKm, avg_pace_sec: avgPaceSec, last_active_at: new Date().toISOString() })
+    .eq('id', uid)
+}
+
+// ---------- เพื่อน ----------
+
+type FriendshipRow = {
+  id: string
+  requester: string
+  addressee: string
+  status: 'pending' | 'accepted'
+  requester_profile: ProfileRow | null
+  addressee_profile: ProfileRow | null
+}
+
+export async function fetchFriends(): Promise<Friend[]> {
+  const uid = await currentUserId()
+  if (!uid) return []
+  const { data, error } = await requireSupabase()
+    .from('friendships')
+    .select(
+      `id,requester,addressee,status,
+       requester_profile:profiles!friendships_requester_fkey(${PROFILE_COLS}),
+       addressee_profile:profiles!friendships_addressee_fkey(${PROFILE_COLS})`,
+    )
+  if (error) throw error
+
+  const out: Friend[] = []
+  for (const row of (data ?? []) as unknown as FriendshipRow[]) {
+    const iAmRequester = row.requester === uid
+    const other = iAmRequester ? row.addressee_profile : row.requester_profile
+    if (!other) continue
+    const status: Friend['status'] =
+      row.status === 'accepted' ? 'friend' : iAmRequester ? 'outgoing' : 'incoming'
+    out.push(toFriend(other, status, BANGKOK))
+  }
+  return out
+}
+
+/** ส่งคำขอด้วยรหัสเพื่อน คืนข้อความผลลัพธ์เป็นภาษาไทยจากฝั่งฐานข้อมูล */
+export async function sendFriendRequestByCode(code: string): Promise<string> {
+  const { data, error } = await requireSupabase().rpc('send_friend_request', { p_code: code })
+  if (error) throw error
+  return String(data)
+}
+
+export async function acceptFriendRequest(friendId: ID): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('friendships')
+    .update({ status: 'accepted' })
+    .eq('requester', friendId)
+    .eq('addressee', uid)
+  if (error) throw error
+}
+
+export async function removeFriendship(friendId: ID): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('friendships')
+    .delete()
+    .or(`and(requester.eq.${uid},addressee.eq.${friendId}),and(requester.eq.${friendId},addressee.eq.${uid})`)
+  if (error) throw error
+}
+
+// ---------- กลุ่ม ----------
+
+type GroupRow = {
+  id: string
+  owner: string
+  name: string
+  emoji: string
+  description: string
+  created_at: string
+  group_members: Array<{ member: string }>
+}
+
+export async function fetchGroups(): Promise<Group[]> {
+  const { data, error } = await requireSupabase()
+    .from('groups')
+    .select('id,owner,name,emoji,description,created_at,group_members(member)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const uid = await currentUserId()
+  return ((data ?? []) as unknown as GroupRow[]).map((g) => ({
+    id: g.id,
+    name: g.name,
+    emoji: g.emoji,
+    description: g.description ?? '',
+    memberIds: (g.group_members ?? []).map((m) => m.member).filter((m) => m !== uid),
+    createdAt: new Date(g.created_at).getTime(),
+  }))
+}
+
+export async function createGroupRemote(
+  name: string,
+  emoji: string,
+  description: string,
+  memberIds: ID[],
+): Promise<Group> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+  // สร้าง id ฝั่งแอปแล้วไม่ขอค่ากลับ — เลี่ยง INSERT ... RETURNING ซึ่ง Postgres จะเอา
+  // policy ของ SELECT มาตรวจแถวใหม่ด้วย และฟังก์ชัน policy ที่เป็น stable
+  // ยังมองไม่เห็นแถวที่เพิ่งใส่ในสเตตเมนต์เดียวกัน
+  const id = newId()
+  const createdAt = Date.now()
+  const { error } = await sb
+    .from('groups')
+    .insert({ id, owner: uid, name, emoji, description, created_at: new Date(createdAt).toISOString() })
+  if (error) throw error
+  await setGroupMembers(id, memberIds)
+  return { id, name, emoji, description, memberIds, createdAt }
+}
+
+export async function setGroupMembers(groupId: ID, memberIds: ID[]): Promise<void> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  const keep = [...new Set(memberIds)].filter((id) => id !== uid)
+  const { error: delErr } = await sb.from('group_members').delete().eq('group_id', groupId)
+  if (delErr) throw delErr
+  if (keep.length === 0) return
+  const { error } = await sb
+    .from('group_members')
+    .insert(keep.map((member) => ({ group_id: groupId, member })))
+  if (error) throw error
+}
+
+export async function updateGroupRemote(groupId: ID, patch: Partial<Group>): Promise<void> {
+  const sb = requireSupabase()
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.emoji !== undefined) row.emoji = patch.emoji
+  if (patch.description !== undefined) row.description = patch.description
+  if (Object.keys(row).length > 0) {
+    const { error } = await sb.from('groups').update(row).eq('id', groupId)
+    if (error) throw error
+  }
+  if (patch.memberIds) await setGroupMembers(groupId, patch.memberIds)
+}
+
+export async function deleteGroupRemote(groupId: ID): Promise<void> {
+  const { error } = await requireSupabase().from('groups').delete().eq('id', groupId)
+  if (error) throw error
+}
+
+// ---------- คำชวนวิ่ง ----------
+
+type InviteRow = {
+  id: string
+  host: string
+  title: string
+  note: string
+  place_name: string
+  place_area: string
+  lat: number
+  lng: number
+  start_at: string
+  target_km: number
+  group_id: string | null
+  status: 'open' | 'cancelled' | 'done'
+  created_at: string
+  invite_replies: Array<{ member: string; reply: InviteReply | null }>
+}
+
+export async function fetchInvites(): Promise<RunInvite[]> {
+  const { data, error } = await requireSupabase()
+    .from('invites')
+    .select(
+      'id,host,title,note,place_name,place_area,lat,lng,start_at,target_km,group_id,status,created_at,invite_replies(member,reply)',
+    )
+    .order('start_at', { ascending: true })
+  if (error) throw error
+  const uid = await currentUserId()
+
+  return ((data ?? []) as unknown as InviteRow[]).map((row) => {
+    const replies: Record<ID, InviteReply> = {}
+    let myReply: InviteReply | undefined
+    for (const r of row.invite_replies ?? []) {
+      if (r.member === uid) {
+        if (r.reply) myReply = r.reply
+        continue
+      }
+      if (r.reply) replies[r.member] = r.reply
+    }
+    return {
+      id: row.id,
+      title: row.title,
+      place: {
+        id: row.id,
+        name: row.place_name,
+        area: row.place_area ?? '',
+        lat: row.lat,
+        lng: row.lng,
+        tags: [],
+      } satisfies Place,
+      startAt: new Date(row.start_at).getTime(),
+      targetKm: Number(row.target_km),
+      note: row.note ?? '',
+      groupId: row.group_id ?? undefined,
+      inviteeIds: (row.invite_replies ?? []).map((r) => r.member).filter((m) => m !== uid),
+      replies,
+      hostIsMe: row.host === uid,
+      hostId: row.host === uid ? undefined : row.host,
+      myReply,
+      createdAt: new Date(row.created_at).getTime(),
+      status: row.status,
+    }
+  })
+}
+
+export async function createInviteRemote(input: {
+  title: string
+  place: Place
+  startAt: number
+  targetKm: number
+  note: string
+  groupId?: ID
+  inviteeIds: ID[]
+}): Promise<void> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+
+  const id = newId()
+  const { error } = await sb.from('invites').insert({
+    id,
+    host: uid,
+    title: input.title,
+    note: input.note,
+    place_name: input.place.name,
+    place_area: input.place.area,
+    lat: input.place.lat,
+    lng: input.place.lng,
+    start_at: new Date(input.startAt).toISOString(),
+    target_km: input.targetKm,
+    group_id: input.groupId ?? null,
+  })
+  if (error) throw error
+
+  // เจ้าภาพนับเป็นไปแน่นอน ส่วนคนที่ถูกชวนเริ่มจากยังไม่ตอบ
+  const rows = [
+    { invite_id: id, member: uid, reply: 'going' as InviteReply },
+    ...input.inviteeIds.map((member) => ({ invite_id: id, member, reply: null })),
+  ]
+  const { error: rErr } = await sb.from('invite_replies').insert(rows)
+  if (rErr) throw rErr
+}
+
+export async function replyInviteRemote(inviteId: ID, reply: InviteReply): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('invite_replies')
+    .update({ reply, replied_at: new Date().toISOString() })
+    .eq('invite_id', inviteId)
+    .eq('member', uid)
+  if (error) throw error
+}
+
+export async function cancelInviteRemote(inviteId: ID): Promise<void> {
+  const { error } = await requireSupabase().from('invites').update({ status: 'cancelled' }).eq('id', inviteId)
+  if (error) throw error
+}
+
+// ---------- ตำแหน่งสด ----------
+
+export type FriendLocation = { userId: ID; pos: LatLng; speedKmh: number; updatedAt: number }
+
+export async function pushMyLocation(pos: LatLng, speedKmh: number | null): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase().from('locations').upsert(
+    {
+      user_id: uid,
+      lat: pos.lat,
+      lng: pos.lng,
+      speed_kmh: speedKmh,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  )
+  if (error) throw error
+}
+
+export async function clearMyLocation(): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  await requireSupabase().from('locations').delete().eq('user_id', uid)
+}
+
+export async function fetchFriendLocations(): Promise<FriendLocation[]> {
+  const uid = await currentUserId()
+  const { data, error } = await requireSupabase()
+    .from('locations')
+    .select('user_id,lat,lng,speed_kmh,updated_at')
+  if (error) throw error
+  return (data ?? [])
+    .filter((r) => r.user_id !== uid)
+    .map((r) => ({
+      userId: r.user_id as string,
+      pos: { lat: r.lat as number, lng: r.lng as number },
+      speedKmh: Number(r.speed_kmh ?? 0),
+      updatedAt: new Date(r.updated_at as string).getTime(),
+    }))
+}
+
+/** รับสัญญาณเมื่อข้อมูลฝั่งเซิร์ฟเวอร์เปลี่ยน คืนฟังก์ชันสำหรับยกเลิก */
+export function subscribeToChanges(onChange: (table: string) => void): () => void {
+  const sb = requireSupabase()
+  const channel = sb.channel('wanna-run-live')
+  for (const table of ['friendships', 'invites', 'invite_replies', 'locations', 'profiles']) {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange(table))
+  }
+  channel.subscribe()
+  return () => {
+    sb.removeChannel(channel)
+  }
+}
+
+// ---------- รูปโปรไฟล์ ----------
+
+const AVATAR_BUCKET = 'avatars'
+
+/** ย่อรูปแล้วอัปขึ้น Storage คืน URL สาธารณะพร้อมพารามิเตอร์กันแคชค้าง */
+export async function uploadAvatar(file: File): Promise<string> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+
+  const thumb = await squareThumbnail(file)
+  const path = `${uid}/avatar.jpg`
+  const { error } = await sb.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, thumb, { contentType: 'image/jpeg', upsert: true, cacheControl: '3600' })
+  if (error) throw error
+
+  const { data } = sb.storage.from(AVATAR_BUCKET).getPublicUrl(path)
+  // ที่อยู่ไฟล์เหมือนเดิมทุกครั้ง จึงต้องต่อเวอร์ชันไว้ให้เบราว์เซอร์โหลดรูปใหม่
+  const url = `${data.publicUrl}?v=${Date.now()}`
+  await updateMyProfile({ avatarUrl: url })
+  return url
+}
+
+export async function removeAvatar(): Promise<void> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) return
+  await sb.storage.from(AVATAR_BUCKET).remove([`${uid}/avatar.jpg`])
+  // ล้างค่าตรง ๆ เพราะ updateMyProfile ข้ามฟิลด์ที่เป็น undefined
+  const { error } = await sb.from('profiles').update({ avatar_url: null }).eq('id', uid)
+  if (error) throw error
+}

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StoreProvider, useStore } from './state/store'
+import { AuthProvider, useAuth } from './state/auth'
+import { isCloudConfigured } from './lib/supabase'
+import { takeCodeFromUrl } from './lib/friendLink'
+import Auth from './screens/Auth'
 import Toaster from './components/Toaster'
 import Onboarding from './screens/Onboarding'
 import Home from './screens/Home'
@@ -34,7 +38,7 @@ const TABS: Array<{ key: Route; label: string; icon: string }> = [
 ]
 
 function Shell() {
-  const { state } = useStore()
+  const { state, syncing } = useStore()
   const [route, setRoute] = useState<Route>('home')
   const [params, setParams] = useState<Record<string, string>>({})
 
@@ -43,6 +47,12 @@ function Shell() {
     setParams(p)
     window.scrollTo({ top: 0 })
   }, [])
+
+  // เปิดจากลิงก์ QR (?add=RUN-XXXX) ให้เด้งไปหน้าเพิ่มเพื่อนทันที
+  useEffect(() => {
+    const code = takeCodeFromUrl()
+    if (code) nav('friends', { add: code })
+  }, [nav])
 
   // ปุ่มย้อนกลับของเบราว์เซอร์ให้กลับมาหน้าหลักแทนการออกจากแอป
   useEffect(() => {
@@ -53,6 +63,7 @@ function Shell() {
     return () => window.removeEventListener('popstate', onPop)
   }, [route])
 
+  if (syncing) return <Splash text="กำลังซิงก์ข้อมูลก๊วนของคุณ..." />
   if (!state.onboarded) return <Onboarding />
 
   const unread = state.notifications.filter((n) => !n.read).length
@@ -61,7 +72,7 @@ function Shell() {
     <div className="shell">
       <main className="page">
         {route === 'home' && <Home nav={nav} />}
-        {route === 'friends' && <Friends nav={nav} />}
+        {route === 'friends' && <Friends nav={nav} addCode={params.add} />}
         {route === 'groups' && <Groups nav={nav} focusId={params.id} />}
         {route === 'invites' && <Invites nav={nav} openNew={params.new === '1'} />}
         {route === 'run' && <RunScreen nav={nav} inviteId={params.inviteId} />}
@@ -97,10 +108,43 @@ function Shell() {
   )
 }
 
-export default function App() {
+function Splash({ text }: { text: string }) {
   return (
-    <StoreProvider>
+    <div className="shell">
+      <div className="page center" style={{ display: 'grid', placeContent: 'center', gap: 12 }}>
+        <div style={{ fontSize: 56 }}>🏃‍♀️💨</div>
+        <div className="muted small">{text}</div>
+      </div>
+    </div>
+  )
+}
+
+function CloudApp() {
+  const { session, loading } = useAuth()
+
+  if (loading) return <Splash text="กำลังเชื่อมต่อ..." />
+  if (!session) return <Auth />
+
+  return (
+    <StoreProvider userId={session.user.id}>
       <Shell />
     </StoreProvider>
+  )
+}
+
+export default function App() {
+  // ไม่ได้ตั้งค่าเซิร์ฟเวอร์ = ใช้งานแบบเก็บข้อมูลในเครื่องอย่างเดียว
+  if (!isCloudConfigured) {
+    return (
+      <StoreProvider>
+        <Shell />
+      </StoreProvider>
+    )
+  }
+
+  return (
+    <AuthProvider>
+      <CloudApp />
+    </AuthProvider>
   )
 }

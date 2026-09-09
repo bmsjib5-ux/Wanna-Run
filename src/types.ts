@@ -4,6 +4,8 @@ export type Profile = {
   id: ID
   name: string
   emoji: string
+  /** รูปโปรไฟล์ที่ผู้ใช้อัปเอง ถ้าไม่มีจะใช้อิโมจิแทน */
+  avatarUrl?: string
   code: string
   level: number
   xp: number
@@ -21,6 +23,7 @@ export type Friend = {
   id: ID
   name: string
   emoji: string
+  avatarUrl?: string
   code: string
   status: FriendStatus
   bio: string

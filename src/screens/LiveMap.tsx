@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
+import Avatar from '../components/Avatar'
 import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
 import { boundsOf, distanceM } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import { PLACES } from '../lib/seed'
+import * as api from '../lib/api'
+import type { FriendPing } from '../lib/useGeo'
 
 export default function LiveMap({ nav }: { nav: Nav }) {
-  const { state, actions } = useStore()
+  const { state, actions, cloud } = useStore()
   const geo = useCurrentPosition(true)
   const [showPlaces, setShowPlaces] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
@@ -23,17 +26,28 @@ export default function LiveMap({ nav }: { nav: Nav }) {
     () => friends.filter((f) => f.sharingLocation).map((f) => ({ id: f.id, home: f.home, sharingLocation: true })),
     [friends],
   )
-  const pings = useFriendPings(sharingFriends)
+  const simulated = useFriendPings(cloud ? [] : sharingFriends)
+  const live = useLiveFriendLocations(cloud)
+  const pings = cloud ? live : simulated
 
   const me = geo.position
   const sharing = state.profile.sharingLocation
 
+  // ส่งตำแหน่งของเราขึ้นเซิร์ฟเวอร์ระหว่างที่เปิดแชร์อยู่
+  useEffect(() => {
+    if (!cloud || !sharing || !me) return
+    const send = () => void api.pushMyLocation(me, null).catch(console.error)
+    send()
+    const timer = window.setInterval(send, 10_000)
+    return () => window.clearInterval(timer)
+  }, [cloud, sharing, me])
+
   const pins = useMemo<MapPin[]>(() => {
     const out: MapPin[] = []
-    if (me) out.push({ id: 'me', pos: me, emoji: state.profile.emoji, label: sharing ? 'คุณ (แชร์อยู่)' : 'คุณ', me: true })
+    if (me) out.push({ id: 'me', pos: me, emoji: state.profile.emoji, photo: state.profile.avatarUrl, label: sharing ? 'คุณ (แชร์อยู่)' : 'คุณ', me: true })
     for (const p of pings) {
       const f = friends.find((x) => x.id === p.id)
-      if (f) out.push({ id: f.id, pos: p.pos, emoji: f.emoji, label: f.name })
+      if (f) out.push({ id: f.id, pos: p.pos, emoji: f.emoji, photo: f.avatarUrl, label: f.name })
     }
     if (showPlaces) {
       for (const pl of PLACES) out.push({ id: pl.id, pos: { lat: pl.lat, lng: pl.lng }, emoji: '🌳', label: pl.name })
@@ -141,7 +155,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
             const away = me ? distanceM(me, p.pos) : null
             return (
               <div key={p.id} className="card tight row">
-                <span className="avatar">{f.emoji}</span>
+                <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online />
                 <span className="grow">
                   <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
                     {f.name}
@@ -151,7 +165,6 @@ export default function LiveMap({ nav }: { nav: Nav }) {
                     {away != null ? ` · ห่างคุณ ${away < 1000 ? `${Math.round(away)} ม.` : `${(away / 1000).toFixed(1)} กม.`}` : ''}
                   </span>
                 </span>
-                <span className="chip ok">📍 สด</span>
               </div>
             )
           })}
@@ -159,15 +172,16 @@ export default function LiveMap({ nav }: { nav: Nav }) {
       )}
 
       <div className="card tight muted tiny" style={{ marginTop: 12, lineHeight: 1.7 }}>
-        ตำแหน่งของคุณอ่านจาก GPS ของเครื่องและไม่ถูกส่งออกนอกอุปกรณ์
-        ส่วนตำแหน่งเพื่อนในเวอร์ชันนี้เป็นข้อมูลตัวอย่างที่จำลองขึ้น เนื่องจากยังไม่มีเซิร์ฟเวอร์กลาง
+        {cloud
+          ? 'ตำแหน่งจะถูกส่งขึ้นเซิร์ฟเวอร์เฉพาะตอนที่คุณเปิดแชร์ และเห็นได้เฉพาะเพื่อนในก๊วนเท่านั้น พอปิดแชร์ ตำแหน่งล่าสุดจะถูกลบทิ้งทันที'
+          : 'ตำแหน่งของคุณอ่านจาก GPS ของเครื่องและไม่ถูกส่งออกนอกอุปกรณ์ ส่วนตำแหน่งเพื่อนในโหมดนี้เป็นข้อมูลตัวอย่างที่จำลองขึ้น'}
       </div>
 
       <Sheet open={shareOpen} title="ใครเห็นตำแหน่งคุณได้บ้าง" subtitle="ปิดรายคนได้ตามต้องการ" onClose={() => setShareOpen(false)}>
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <span className="avatar">{f.emoji}</span>
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={f.sharingLocation} />
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>
@@ -181,4 +195,39 @@ export default function LiveMap({ nav }: { nav: Nav }) {
       </Sheet>
     </>
   )
+}
+
+/** ตำแหน่งจริงของเพื่อนจากเซิร์ฟเวอร์ อัปเดตทั้งแบบสดและถามซ้ำเป็นระยะ */
+function useLiveFriendLocations(enabled: boolean): FriendPing[] {
+  const [pings, setPings] = useState<FriendPing[]>([])
+  const alive = useRef(true)
+
+  useEffect(() => {
+    alive.current = true
+    if (!enabled) {
+      setPings([])
+      return
+    }
+    const pull = () => {
+      api
+        .fetchFriendLocations()
+        .then((rows) => {
+          if (!alive.current) return
+          setPings(rows.map((r) => ({ id: r.userId, pos: r.pos, movingKmh: r.speedKmh })))
+        })
+        .catch(console.error)
+    }
+    pull()
+    const timer = window.setInterval(pull, 8000)
+    const unsubscribe = api.subscribeToChanges((table) => {
+      if (table === 'locations') pull()
+    })
+    return () => {
+      alive.current = false
+      window.clearInterval(timer)
+      unsubscribe()
+    }
+  }, [enabled])
+
+  return pings
 }

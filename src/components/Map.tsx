@@ -7,6 +7,8 @@ export type MapPin = {
   id: string
   pos: LatLng
   emoji: string
+  /** รูปโปรไฟล์ ถ้ามีจะแสดงแทนอิโมจิ */
+  photo?: string
   label?: string
   me?: boolean
 }
@@ -14,9 +16,11 @@ export type MapPin = {
 function icon(pin: MapPin) {
   return L.divIcon({
     className: '',
-    html: `<div class="pin ${pin.me ? 'me' : ''}"><div class="bubble">${pin.emoji}</div>${
-      pin.label ? `<div class="tag">${escapeHtml(pin.label)}</div>` : ''
-    }</div>`,
+    html: `<div class="pin ${pin.me ? 'me' : ''}"><div class="bubble">${
+      pin.photo
+        ? `<img src="${escapeHtml(pin.photo)}" alt="" />`
+        : pin.emoji
+    }</div>${pin.label ? `<div class="tag">${escapeHtml(pin.label)}</div>` : ''}</div>`,
     iconSize: [34, pin.label ? 52 : 34],
     iconAnchor: [17, pin.label ? 26 : 17],
   })
