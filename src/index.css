@@ -282,7 +282,8 @@ a { color: var(--accent); }
   border: 1px solid var(--line);
   position: relative; z-index: 0; isolation: isolate;
 }
-.map-full { height: calc(100dvh - var(--nav-h) - 128px); min-height: 340px; }
+/* แผนที่สูง 70% ของจอ เหลือพื้นที่ให้เห็นเมนูล่างและการ์ดควบคุมใต้แผนที่ */
+.map-full { height: 70dvh; min-height: 280px; }
 .leaflet-container {
   font: inherit;
   /* ตารางจาง ๆ ไว้เป็นพื้นหลัง เผื่อโหลด tile ไม่ได้จะได้ไม่เห็นเป็นกล่องดำเปล่า */
