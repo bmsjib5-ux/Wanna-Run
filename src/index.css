@@ -99,6 +99,39 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* รูปพื้นหลังจากเครื่องผู้ใช้: วางเป็นชั้น fixed ด้านหลัง (background-attachment: fixed ใช้บน iOS ไม่ได้)
+   แล้วทาสีพื้นทับด้วยความทึบตามระดับที่เลือก เพื่อให้ตัวหนังสือยังอ่านออก */
+:root[data-bg] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-image) center / cover no-repeat, var(--bg);
+}
+:root[data-bg] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);
+  opacity: var(--bg-dim, .6);
+  pointer-events: none;
+}
+:root[data-bg="light"]  { --bg-dim: .35; }
+:root[data-bg="medium"] { --bg-dim: .6; }
+:root[data-bg="strong"] { --bg-dim: .82; }
+:root[data-bg] body { background: transparent; }
+:root[data-bg] .shell { background: none; }
+:root[data-bg] .card { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+:root[data-bg] .section-title, :root[data-bg] .topbar h1, :root[data-bg] .topbar .sub { text-shadow: 0 1px 8px rgba(0, 0, 0, .55); }
+
+.bg-preview {
+  width: 64px; height: 64px; flex: none;
+  border-radius: 14px; border: 1px solid var(--line);
+  background: var(--surface-2) center / cover no-repeat;
+  font-size: 24px; display: inline-flex; align-items: center; justify-content: center;
+}
+
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; }
 a { color: var(--accent-text); }
@@ -345,8 +378,27 @@ a { color: var(--accent-text); }
   border: 1px solid var(--line);
   position: relative; z-index: 0; isolation: isolate;
 }
-/* แผนที่สูง 70% ของจอ เหลือพื้นที่ให้เห็นเมนูล่างและการ์ดควบคุมใต้แผนที่ */
-.map-full { height: 70dvh; min-height: 280px; }
+/*
+  ขนาดแผนที่สด: สัดส่วน 5:6 ตามความกว้าง จึงเป็นสี่เหลี่ยมค่อนข้างจัตุรัสเหมือนกันทุกเครื่อง
+  ไม่ยืดยาวลงมาทับเมนูบนจอสูง ๆ (จอคอม/แท็บเล็ต) และยังจำกัดไม่เกิน 70% ของจอไว้อีกชั้น
+*/
+.map-full { height: auto; aspect-ratio: 5 / 6; max-height: 70dvh; min-height: 280px; }
+
+/* ช่องค้นหาสถานที่บนหน้าแผนที่ พร้อมรายการผลลัพธ์ที่ลอยทับแผนที่ */
+.search-wrap { position: relative; z-index: 30; margin-bottom: 10px; }
+.search-results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
+  max-height: 46dvh; overflow-y: auto;
+}
+.search-item {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 11px 14px; color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+.search-item:last-child { border-bottom: none; }
+.search-item:active { background: var(--surface-2); }
 .leaflet-container {
   font: inherit;
   /* ตารางจาง ๆ ไว้เป็นพื้นหลัง เผื่อโหลด tile ไม่ได้จะได้ไม่เห็นเป็นกล่องเปล่า */

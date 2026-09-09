@@ -132,6 +132,31 @@ export async function updateMyProfile(patch: Partial<Profile>): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * heartbeat บอกว่ายังเปิดแอปอยู่ — เพื่อนใช้คำนวณสถานะออนไลน์
+ * ตอนถูกย่อหน้าจอเบราว์เซอร์อาจหยุด JS ทันที จึงยิงตรงด้วย fetch keepalive
+ * ที่ระบบจะส่งให้จนจบแม้หน้าเว็บปิดไปแล้ว (sendBeacon ใส่ header ไม่ได้)
+ */
+export async function touchPresence(keepalive = false): Promise<void> {
+  const sb = requireSupabase()
+  const { data } = await sb.auth.getSession()
+  const session = data.session
+  if (!session) return
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    keepalive,
+    headers: {
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ last_active_at: new Date().toISOString() }),
+  })
+  if (!res.ok) throw new Error(`heartbeat ล้มเหลว (${res.status})`)
+}
+
 export async function updateMyStats(totalKm: number, avgPaceSec: number | null): Promise<void> {
   const uid = await currentUserId()
   if (!uid) return
@@ -457,19 +482,42 @@ const WATCHED_TABLES = ['friendships', 'invites', 'invite_replies', 'locations',
  * ("cannot add postgres_changes callbacks ... after subscribe()") ทำให้ฝั่งที่เรียกทีหลัง
  * พังทั้งคอมโพเนนต์
  */
+export type ChangeRow = Record<string, unknown>
+
 export function subscribeToChanges(
-  onChange: (table: string) => void,
+  onChange: (table: string, row: ChangeRow | null) => void,
   tables: string[] = WATCHED_TABLES,
 ): () => void {
   const sb = requireSupabase()
   const channel = sb.channel(`wanna-run:${newId()}`)
   for (const table of tables) {
-    channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange(table))
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+      const row = payload.new && typeof payload.new === 'object' && Object.keys(payload.new).length > 0 ? (payload.new as ChangeRow) : null
+      onChange(table, row)
+    })
   }
   channel.subscribe()
   return () => {
     void sb.removeChannel(channel)
   }
+}
+
+
+/**
+ * เช็คว่าแถวโปรไฟล์ที่เปลี่ยนคือแค่ heartbeat ของเพื่อนคนนี้หรือเปล่า
+ * ถ้าใช่ คืนเวลาที่เห็นล่าสุดให้เอาไปแปะในสเตตได้เลย ไม่ต้องดึงทั้งชุดใหม่
+ */
+export function heartbeatOnly(row: ChangeRow, friend: Friend): number | null {
+  if (row.id !== friend.id || typeof row.last_active_at !== 'string') return null
+  const same =
+    row.name === friend.name &&
+    row.emoji === friend.emoji &&
+    (row.avatar_url ?? undefined) === friend.avatarUrl &&
+    row.sharing_location === friend.sharingLocation &&
+    Math.round(Number(row.total_km ?? 0)) === friend.totalKm &&
+    (row.avg_pace_sec ?? 360) === friend.avgPaceSec &&
+    (row.bio ?? '') === friend.bio
+  return same ? new Date(row.last_active_at).getTime() : null
 }
 
 // ---------- รูปโปรไฟล์ ----------

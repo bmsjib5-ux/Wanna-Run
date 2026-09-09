@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
@@ -7,7 +7,9 @@ import { useStore } from '../state/store'
 import { useCurrentPosition, useRunTracker } from '../lib/useGeo'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { uid } from '../lib/id'
-import { vibrate } from '../lib/notify'
+import { notificationPermission, requestNotificationPermission, vibrate } from '../lib/notify'
+import { useWakeLock } from '../lib/wakeLock'
+import { closeRunNotification, showRunNotification } from '../lib/runNotice'
 import type { RunSession } from '../types'
 
 export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: string }) {
@@ -27,6 +29,30 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
   useEffect(() => {
     if (tracker.running && km > 0) vibrate([60, 40, 60])
   }, [km, tracker.running])
+
+  // กันจอดับระหว่างวิ่ง ไม่งั้น GPS หยุดตามจอ
+  const wake = useWakeLock(tracker.running)
+
+  // แจ้งเตือนค้างบนแถบสถานะ (Android) อัปเดตทุก 30 วิ, ทุกกิโล และตอนพัก/ไปต่อ
+  const notifyOn = tracker.running && notificationPermission() === 'granted'
+  const latest = useRef({ distanceM: 0, elapsedMs: 0, paused: false })
+  latest.current = { distanceM: tracker.distanceM, elapsedMs: tracker.elapsedMs, paused: tracker.paused }
+  const halfMinute = Math.floor(tracker.elapsedMs / 30_000)
+  useEffect(() => {
+    if (!notifyOn) {
+      void closeRunNotification()
+      return
+    }
+    const { distanceM, elapsedMs, paused } = latest.current
+    void showRunNotification(distanceM, elapsedMs, paused)
+  }, [notifyOn, tracker.paused, km, halfMinute])
+  useEffect(() => () => void closeRunNotification(), [])
+
+  /** ขอสิทธิ์แจ้งเตือนตอนกดเริ่ม (ต้องมาจากการแตะของผู้ใช้) แล้วค่อยเริ่มจับ */
+  const begin = (simulated: boolean) => {
+    if (notificationPermission() === 'default') void requestNotificationPermission()
+    start(simulated, geo.position ?? undefined)
+  }
 
   const finish = () => {
     stop()
@@ -90,7 +116,7 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
         <div className="run-controls">
           {!tracker.running ? (
             <>
-              <button className="run-btn" onClick={() => start(false, geo.position ?? undefined)}>
+              <button className="run-btn" onClick={() => begin(false)}>
                 เริ่ม
               </button>
               <button className="run-btn secondary" onClick={() => setAskSim(true)}>
@@ -117,7 +143,16 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
             <span className={`chip ${tracker.accuracy <= 20 ? 'ok' : 'warn'}`}>GPS ±{Math.round(tracker.accuracy)} ม.</span>
           )}
           {!tracker.running && geo.status === 'denied' && <span className="chip bad">ไม่ได้สิทธิ์ตำแหน่ง</span>}
+          {tracker.running && wake === 'held' && <span className="chip ok">🔆 จอไม่ดับ</span>}
         </div>
+
+        {tracker.running && wake !== 'held' && !tracker.simulated && (
+          <div className="tiny muted center" style={{ marginTop: 10, lineHeight: 1.6 }}>
+            {wake === 'unsupported'
+              ? 'เครื่องนี้กันจอดับให้ไม่ได้ — เปิดหน้าจอค้างไว้ระหว่างวิ่ง ไม่งั้น GPS จะหยุดตามจอ'
+              : 'กันจอดับไม่ได้ (โหมดประหยัดแบต?) — เปิดหน้าจอค้างไว้ระหว่างวิ่ง'}
+          </div>
+        )}
 
         {tracker.error && (
           <div className="card tight small" style={{ marginTop: 12, borderColor: 'rgba(255,107,107,.35)', color: 'var(--danger)' }}>
@@ -184,7 +219,7 @@ export default function RunScreen({ nav, inviteId }: { nav: Nav; inviteId?: stri
           style={{ marginTop: 14 }}
           onClick={() => {
             setAskSim(false)
-            start(true, geo.position ?? undefined)
+            begin(true)
           }}
         >
           เริ่มโหมดจำลอง

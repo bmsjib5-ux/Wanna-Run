@@ -14,7 +14,16 @@ import type { ID, Place, RunInvite } from '../types'
 
 const TARGETS = [3, 5, 10, 15, 21]
 
-export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean }) {
+export default function Invites({
+  nav,
+  openNew,
+  initialPlace,
+}: {
+  nav: Nav
+  openNew?: boolean
+  /** สถานที่ที่ส่งมาจากหมุดบนแผนที่ */
+  initialPlace?: Place
+}) {
   const { state, actions } = useStore()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const [creating, setCreating] = useState(!!openNew)
@@ -64,7 +73,7 @@ export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean 
         )}
       </div>
 
-      <CreateInvite open={creating} onClose={() => setCreating(false)} />
+      <CreateInvite open={creating} onClose={() => setCreating(false)} initialPlace={initialPlace} />
 
       <Sheet open={!!live} title={live?.title ?? ''} subtitle={live ? whenLabel(live.startAt) : ''} onClose={() => setDetail(null)}>
         {live && (
@@ -173,12 +182,20 @@ export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean 
   )
 }
 
-function CreateInvite({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CreateInvite({
+  open,
+  onClose,
+  initialPlace,
+}: {
+  open: boolean
+  onClose: () => void
+  initialPlace?: Place
+}) {
   const { state, actions } = useStore()
   const friends = state.friends.filter((f) => f.status === 'friend')
 
   const [title, setTitle] = useState('')
-  const [place, setPlace] = useState<Place>(PLACES[0])
+  const [place, setPlace] = useState<Place>(initialPlace ?? PLACES[0])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [when, setWhen] = useState(() => toLocalInput(defaultStart()))
   const [target, setTarget] = useState(5)

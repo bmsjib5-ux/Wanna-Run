@@ -36,3 +36,16 @@ self.addEventListener('fetch', (event) => {
     ),
   )
 })
+
+// แตะแจ้งเตือน (เช่น ตัวเลขระยะทางระหว่างวิ่ง) ให้กลับมาที่แอปแท็บเดิม ไม่เปิดซ้ำ
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const existing = list.find((c) => 'focus' in c)
+      if (existing) return existing.focus()
+      return self.clients.openWindow(target)
+    }),
+  )
+})

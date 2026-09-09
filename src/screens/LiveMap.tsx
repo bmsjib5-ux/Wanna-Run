@@ -6,9 +6,13 @@ import Avatar from '../components/Avatar'
 import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
+import { isOnline, useNow } from '../lib/presence'
 import { boundsOf, distanceM } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import { PLACES } from '../lib/seed'
+import { directionsUrl } from '../lib/geo'
+import { presetMatches, reverseGeocode, searchPlaces, type SearchHit } from '../lib/geocode'
+import type { LatLng, Place } from '../types'
 import * as api from '../lib/api'
 import type { FriendPing } from '../lib/useGeo'
 
@@ -17,6 +21,67 @@ export default function LiveMap({ nav }: { nav: Nav }) {
   const geo = useCurrentPosition(true)
   const [showPlaces, setShowPlaces] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
+
+  // หมุดที่ผู้ใช้ปักเอง (แตะบนแผนที่ หรือเลือกจากผลค้นหา) มีได้ทีละหนึ่งจุด
+  const [pin, setPin] = useState<Place | null>(null)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchHit[]>([])
+  const [searching, setSearching] = useState(false)
+  const reverseCtl = useRef<AbortController | null>(null)
+
+  // ค้นหาแบบหน่วง: Nominatim ขอไม่เกิน 1 คำขอ/วินาที จึงห้ามยิงทุกตัวอักษร
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+    // รายการแนะนำขึ้นทันที ส่วนผลจาก OSM ค่อยตามมาแทนที่เมื่อโหลดเสร็จ
+    setResults(presetMatches(q))
+    setSearching(true)
+    const ctl = new AbortController()
+    const timer = window.setTimeout(() => {
+      searchPlaces(q, ctl.signal)
+        .then((hits) => {
+          setResults(hits)
+          setSearching(false)
+        })
+        .catch((err: Error) => {
+          if (err.name !== 'AbortError') setSearching(false)
+        })
+    }, 600)
+    return () => {
+      ctl.abort()
+      window.clearTimeout(timer)
+    }
+  }, [query])
+
+  /** ปักหมุดที่พิกัดนี้ แล้วค่อยไปถามชื่อสถานที่มาใส่ทีหลัง */
+  const dropPin = (pos: LatLng) => {
+    reverseCtl.current?.abort()
+    const ctl = new AbortController()
+    reverseCtl.current = ctl
+    setPin({
+      id: `pin_${Date.now()}`,
+      name: 'จุดที่ปักหมุด',
+      area: `${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`,
+      lat: pos.lat,
+      lng: pos.lng,
+      tags: ['ปักหมุดเอง'],
+    })
+    reverseGeocode(pos, ctl.signal)
+      .then((place) => {
+        if (!ctl.signal.aborted) setPin((cur) => (cur && cur.lat === pos.lat && cur.lng === pos.lng ? { ...cur, ...place, id: cur.id } : cur))
+      })
+      .catch(() => undefined)
+  }
+
+  const choose = (hit: SearchHit) => {
+    setPin({ id: hit.id, name: hit.name, area: hit.area, lat: hit.lat, lng: hit.lng, tags: hit.tags })
+    setQuery('')
+    setResults([])
+  }
 
   const friends = useMemo(
     () => state.friends.filter((f) => f.status === 'friend'),
@@ -35,6 +100,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
 
   const me = geo.position
   const sharing = state.profile.sharingLocation
+  const now = useNow()
 
   // ส่งตำแหน่งของเราขึ้นเซิร์ฟเวอร์ระหว่างที่เปิดแชร์อยู่
   useEffect(() => {
@@ -55,15 +121,16 @@ export default function LiveMap({ nav }: { nav: Nav }) {
     if (showPlaces) {
       for (const pl of PLACES) out.push({ id: pl.id, pos: { lat: pl.lat, lng: pl.lng }, emoji: '🌳', label: pl.name })
     }
+    if (pin) out.push({ id: 'pin', pos: { lat: pin.lat, lng: pin.lng }, emoji: '📍', label: pin.name })
     return out
-  }, [me, pings, friends, showPlaces, sharing, state.profile.emoji])
+  }, [me, pings, friends, showPlaces, sharing, state.profile.emoji, state.profile.avatarUrl, pin])
 
   // เมื่อไม่ได้แสดงหมุดสวน ให้ซูมพอดีกับคุณและเพื่อนที่แชร์ตำแหน่ง
   const fit = useMemo(() => {
-    if (showPlaces) return null
+    if (showPlaces || pin) return null
     const pts = [...(me ? [me] : []), ...pings.map((p) => p.pos)]
     return pts.length > 1 ? boundsOf(pts) : null
-  }, [me, pings, showPlaces])
+  }, [me, pings, showPlaces, pin])
 
   const shareLink = () => {
     if (!me) {
@@ -95,7 +162,76 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         }
       />
 
-      <Map center={me ?? geo.fallback} zoom={me ? 15 : 13} pins={pins} fit={fit} className="map-box map-full" follow />
+      <div className="search-wrap">
+        <input
+          className="input"
+          type="search"
+          placeholder="ค้นหาสวน ถนน หรือสถานที่..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="ค้นหาสถานที่บนแผนที่"
+        />
+        {query.trim().length >= 2 && (
+          <div className="search-results" role="listbox">
+            {searching && <div className="muted tiny" style={{ padding: '8px 14px 0' }}>กำลังค้นหาเพิ่มจาก OpenStreetMap...</div>}
+            {!searching && results.length === 0 && <div className="muted small" style={{ padding: 12 }}>ไม่พบสถานที่ ลองพิมพ์ชื่อเขตหรือถนน</div>}
+            {results.map((r) => (
+              <button key={r.id} className="search-item" role="option" onClick={() => choose(r)}>
+                <span>{r.source === 'preset' ? '🌳' : '📍'}</span>
+                <span className="grow">
+                  <span className="strong" style={{ display: 'block', fontSize: 14 }}>{r.name}</span>
+                  <span className="muted tiny">{r.area}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Map
+        center={pin ? { lat: pin.lat, lng: pin.lng } : (me ?? geo.fallback)}
+        zoom={pin ? 16 : me ? 15 : 13}
+        pins={pins}
+        fit={fit}
+        className="map-box map-full"
+        follow
+        onPick={dropPin}
+      />
+      <div className="muted tiny center" style={{ marginTop: 6 }}>
+        แตะบนแผนที่เพื่อปักหมุด
+      </div>
+
+      {pin && (
+        <div className="card" style={{ marginTop: 10, borderColor: 'rgba(var(--accent-rgb), .45)' }}>
+          <div className="row">
+            <span className="avatar">📍</span>
+            <div className="grow">
+              <div className="strong" style={{ fontSize: 14.5 }}>{pin.name}</div>
+              <div className="muted small">{pin.area}</div>
+            </div>
+            <button className="btn xs" onClick={() => setPin(null)} aria-label="ลบหมุด">
+              ✕
+            </button>
+          </div>
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <button
+              className="btn primary sm grow"
+              onClick={() => nav('invites', { new: '1', lat: String(pin.lat), lng: String(pin.lng), name: pin.name, area: pin.area })}
+            >
+              📣 ชวนวิ่งที่นี่
+            </button>
+            <a
+              className="btn sm grow"
+              style={{ textDecoration: 'none' }}
+              href={directionsUrl({ lat: pin.lat, lng: pin.lng })}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              🧭 นำทาง
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="row">
@@ -139,8 +275,8 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <button className={`chip ${showPlaces ? 'on' : ''}`} onClick={() => setShowPlaces((v) => !v)}>
           🌳 แสดงสวนแนะนำ
         </button>
-        <button className="chip" onClick={() => nav('invites', { new: '1' })}>
-          📣 ชวนวิ่งจากจุดนี้
+        <button className="chip" onClick={() => me && dropPin(me)} disabled={!me}>
+          📍 ปักหมุดที่ตำแหน่งฉัน
         </button>
       </div>
 
@@ -184,7 +320,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={f.sharingLocation} />
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={isOnline(f.lastActiveAt, now)} />
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>

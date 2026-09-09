@@ -6,6 +6,7 @@ import Avatar from '../components/Avatar'
 import QrCode from '../components/QrCode'
 import QrScanner from '../components/QrScanner'
 import { friendLink } from '../lib/friendLink'
+import { isOnline, presenceLabel, useNow } from '../lib/presence'
 import { useStore } from '../state/store'
 import { agoLabel } from '../lib/format'
 import { paceLabel } from '../lib/geo'
@@ -300,16 +301,19 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
 
 function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemove: () => void }) {
   const [open, setOpen] = useState(false)
+  const now = useNow()
+  const online = isOnline(friend.lastActiveAt, now)
   return (
     <>
       <button className="list-btn" onClick={() => setOpen(true)}>
-        <Avatar emoji={friend.emoji} photo={friend.avatarUrl} name={friend.name} online={friend.sharingLocation} />
+        <Avatar emoji={friend.emoji} photo={friend.avatarUrl} name={friend.name} online={online} />
         <span className="grow">
           <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
             {friend.name}
           </span>
           <span className="muted small">
-            {friend.totalKm} กม. · {paceLabel(friend.avgPaceSec)} · {agoLabel(friend.lastActiveAt)}
+            {friend.totalKm} กม. · {paceLabel(friend.avgPaceSec)} · {online ? 'ออนไลน์' : agoLabel(friend.lastActiveAt)}
+            {friend.sharingLocation ? ' · 📍' : ''}
           </span>
         </span>
       </button>
@@ -317,7 +321,7 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
       <Sheet
         open={open}
         title={`${friend.emoji} ${friend.name}`}
-        subtitle={`${friend.sharingLocation ? '🟢 ออนไลน์' : '⚪ ออฟไลน์'} · ${friend.bio}`}
+        subtitle={`${online ? '🟢' : '⚪'} ${presenceLabel(friend.lastActiveAt, now)}${friend.sharingLocation ? ' · 📍 แชร์ตำแหน่ง' : ''}${friend.bio ? ` · ${friend.bio}` : ''}`}
         onClose={() => setOpen(false)}
       >
         <div className="card">
