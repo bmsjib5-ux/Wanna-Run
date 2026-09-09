@@ -74,7 +74,24 @@ function Shell() {
         {route === 'home' && <Home nav={nav} />}
         {route === 'friends' && <Friends nav={nav} addCode={params.add} />}
         {route === 'groups' && <Groups nav={nav} focusId={params.id} />}
-        {route === 'invites' && <Invites nav={nav} openNew={params.new === '1'} />}
+        {route === 'invites' && (
+          <Invites
+            nav={nav}
+            openNew={params.new === '1'}
+            initialPlace={
+              params.lat && params.lng
+                ? {
+                    id: 'pin_from_map',
+                    name: params.name || 'จุดที่ปักหมุด',
+                    area: params.area || '',
+                    lat: Number(params.lat),
+                    lng: Number(params.lng),
+                    tags: ['ปักหมุดเอง'],
+                  }
+                : undefined
+            }
+          />
+        )}
         {route === 'run' && <RunScreen nav={nav} inviteId={params.inviteId} />}
         {route === 'map' && <LiveMap nav={nav} />}
         {route === 'games' && <Games nav={nav} tab={params.tab} />}
