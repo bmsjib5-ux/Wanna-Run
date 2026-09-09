@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import InviteCard from '../components/InviteCard'
+import Avatar from '../components/Avatar'
 import { levelOf, missionsWithProgress, useStore } from '../state/store'
 import { startOfWeek } from '../lib/format'
 
@@ -40,7 +41,12 @@ export default function Home({ nav }: { nav: Nav }) {
   return (
     <>
       <TopBar
-        title={`สวัสดี ${profile.name} ${profile.emoji}`}
+        left={
+          <button onClick={() => nav('profile')} aria-label="โปรไฟล์และแก้ไขข้อมูลส่วนตัว">
+            <Avatar emoji={profile.emoji} photo={profile.avatarUrl} name={profile.name} />
+          </button>
+        }
+        title={`สวัสดี ${profile.name}`}
         subtitle={greeting()}
         right={
           <button

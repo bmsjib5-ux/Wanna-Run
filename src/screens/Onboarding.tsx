@@ -3,6 +3,7 @@ import { useStore } from '../state/store'
 import { requestNotificationPermission } from '../lib/notify'
 import AvatarPicker from '../components/AvatarPicker'
 import { blobToDataUrl, squareThumbnail } from '../lib/image'
+import { nameHint, useNameCheck } from '../lib/useNameCheck'
 
 const AVATARS = ['🏃', '🦊', '🐼', '🐯', '🦄', '🐧', '🐨', '🐸', '🦁', '🐰', '🐻', '🐙']
 const GOALS = [10, 20, 30, 50]
@@ -15,6 +16,9 @@ export default function Onboarding() {
   const [goal, setGoal] = useState(20)
   const [photo, setPhoto] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | undefined>()
+
+  const check = useNameCheck(name)
+  const hint = nameHint(check)
 
   const finish = async () => {
     await requestNotificationPermission()
@@ -66,7 +70,20 @@ export default function Onboarding() {
                 placeholder="เช่น เอ๋ย, Run With Ple"
                 maxLength={24}
                 autoFocus
+                style={check === 'taken' ? { borderColor: 'var(--danger)' } : undefined}
               />
+              {hint && (
+                <span
+                  className="tiny"
+                  style={{
+                    display: 'block',
+                    marginTop: 6,
+                    color: hint.tone === 'ok' ? 'var(--ok)' : hint.tone === 'bad' ? 'var(--danger)' : 'var(--muted)',
+                  }}
+                >
+                  {hint.text}
+                </span>
+              )}
             </label>
 
             <div className="field">
@@ -127,7 +144,12 @@ export default function Onboarding() {
               และจะขอ <b>ตำแหน่ง</b> ตอนที่คุณเริ่มวิ่งหรือเปิดแผนที่ ข้อมูลทั้งหมดเก็บไว้ในเครื่องของคุณเท่านั้น
             </div>
 
-            <button className="btn primary block" style={{ marginTop: 18 }} onClick={finish} disabled={!name.trim()}>
+            <button
+              className="btn primary block"
+              style={{ marginTop: 18 }}
+              onClick={finish}
+              disabled={!name.trim() || check === 'taken' || check === 'checking'}
+            >
               เข้าใช้งาน Wanna Run?
             </button>
             <button className="btn ghost block" onClick={() => setStep(0)}>

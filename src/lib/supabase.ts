@@ -36,6 +36,7 @@ export function describeAuthError(message: string): string {
   if (m.includes('email not confirmed')) return 'ยังไม่ได้ยืนยันอีเมล เช็กกล่องจดหมายก่อนนะ'
   if (m.includes('unable to validate email')) return 'รูปแบบอีเมลไม่ถูกต้อง'
   if (m.includes('rate limit') || m.includes('too many')) return 'ลองบ่อยเกินไป รอสักครู่แล้วลองใหม่'
+  if (m.includes('profiles_name_lower_key') || m.includes('มีคนใช้แล้ว')) return 'ชื่อนี้มีคนใช้แล้ว ลองตั้งชื่ออื่นดูนะ'
   if (m.includes('failed to fetch') || m.includes('network')) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ เช็กอินเทอร์เน็ตก่อน'
   return message
 }
