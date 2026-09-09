@@ -29,3 +29,5 @@ dist-ssr
 
 # สร้างใหม่ทุกครั้งที่ build
 public/build-info.json
+*.keystore
+*.jks

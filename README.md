@@ -129,6 +129,51 @@ cp .env.example .env
 `npm run build` แล้วอัปโหลดโฟลเดอร์ `dist/` ขึ้น Netlify / Vercel / Cloudflare Pages / GitHub Pages
 อย่าลืมตั้ง SPA fallback ให้ทุกเส้นทางตกมาที่ `index.html`
 
+## แอป Android (APK)
+
+โปรเจกต์ห่อด้วย [Capacitor](https://capacitorjs.com/) ใช้โค้ดหน้าจอชุดเดียวกับเว็บ
+สิ่งที่ได้เพิ่มมาเมื่อรันเป็นแอปคือ **จับระยะทางต่อเนื่องแม้ย่อแอปหรือจอดับ**
+(ผ่าน foreground service) และ **แจ้งเตือนค้างบนแถบสถานะ** ซึ่งเว็บทำไม่ได้
+
+### สร้าง APK ผ่าน GitHub Actions (ไม่ต้องลง Android Studio)
+
+1. ใส่ค่าที่ Settings → Secrets and variables → Actions
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — ถ้าไม่ใส่ แอปจะเปิดในโหมดทดลอง
+   - (ถ้าอยากได้ APK ที่เซ็นชื่อเอง) `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+     `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+2. ไปที่แท็บ **Actions → สร้าง APK สำหรับ Android → Run workflow**
+3. รอสักครู่แล้วโหลดไฟล์จาก **Artifacts → wanna-run-apk**
+
+push แท็กขึ้นต้นด้วย `v` (เช่น `v1.0.0`) จะสร้าง APK แล้วแนบไปกับ GitHub Release ให้อัตโนมัติ
+
+### สร้างเองบนเครื่อง
+
+ต้องมี JDK 21 และ Android SDK (ผ่าน Android Studio หรือ command line tools)
+
+```bash
+npm run android:apk     # build เว็บ → sync → สร้าง APK แบบ debug
+# ได้ไฟล์ที่ android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### สร้าง keystore สำหรับเซ็นแอป
+
+```bash
+keytool -genkey -v -keystore wanna-run.keystore -alias wanna-run \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 wanna-run.keystore     # เอาผลลัพธ์ไปใส่ ANDROID_KEYSTORE_BASE64
+```
+
+> เก็บไฟล์ keystore ไว้ให้ดี ถ้าหายจะอัปเดตแอปทับตัวเดิมไม่ได้อีก (ไฟล์ `*.keystore` ถูก gitignore ไว้แล้ว)
+
+### ข้อควรรู้
+
+- แอปขอสิทธิ์ตำแหน่งและแจ้งเตือนตอนกด **เริ่ม** ครั้งแรก ระหว่างวิ่งจะมีแจ้งเตือนค้างสองอัน
+  อันหนึ่งของระบบติดตามตำแหน่ง อีกอันแสดงระยะและเวลาที่อัปเดตเรื่อย ๆ
+- ไม่ได้ขอสิทธิ์ `ACCESS_BACKGROUND_LOCATION` เพราะใช้ foreground service ซึ่งเพียงพอแล้ว
+  และทำให้ไม่ต้องผ่านการรีวิวพิเศษของ Play Store
+- เว็บบน Render ยังใช้งานได้ตามปกติ แอปเป็นอีกช่องทางหนึ่ง ข้อมูลอยู่บน Supabase ชุดเดียวกัน
+- อัปเดตแอปต้องสร้าง APK ใหม่แล้วติดตั้งทับ (ไม่เหมือนเว็บที่รีเฟรชแล้วได้เลย)
+
 ## โครงสร้างโค้ด
 
 ```

@@ -1,5 +1,6 @@
 import { formatDuration, formatKm } from './geo'
 import { notificationPermission } from './notify'
+import { clearRunNotificationNative, isNative, showRunNotificationNative } from './native'
 
 const TAG = 'wanna-run:tracking'
 
@@ -17,9 +18,13 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
  * มือถือต้องแสดงผ่าน service worker เท่านั้น ส่วน `new Notification` เหลือไว้สำหรับเดสก์ท็อป/dev
  */
 export async function showRunNotification(distanceM: number, elapsedMs: number, paused: boolean): Promise<void> {
-  if (notificationPermission() !== 'granted') return
   const title = paused ? '⏸ พักการวิ่ง' : '🏃 กำลังวิ่ง'
   const body = `${formatKm(distanceM)} กม. · ${formatDuration(elapsedMs)} — แตะเพื่อกลับไปที่แอป`
+  if (isNative()) {
+    await showRunNotificationNative(title, body)
+    return
+  }
+  if (notificationPermission() !== 'granted') return
   const options: NotificationOptions & { renotify?: boolean } = {
     body,
     tag: TAG,
@@ -40,6 +45,10 @@ export async function showRunNotification(distanceM: number, elapsedMs: number, 
 }
 
 export async function closeRunNotification(): Promise<void> {
+  if (isNative()) {
+    await clearRunNotificationNative()
+    return
+  }
   const reg = await registration()
   if (!reg) return
   try {

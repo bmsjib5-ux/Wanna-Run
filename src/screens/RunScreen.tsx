@@ -9,6 +9,7 @@ import { useRun } from '../state/run'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { uid } from '../lib/id'
 import { notificationPermission, requestNotificationPermission } from '../lib/notify'
+import { ensureNotificationPermission, isNative } from '../lib/native'
 import type { RunSession } from '../types'
 
 export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; inviteId?: string }) {
@@ -27,7 +28,8 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
 
   /** ขอสิทธิ์แจ้งเตือนตอนกดเริ่ม (ต้องมาจากการแตะของผู้ใช้) แล้วค่อยเริ่มจับ */
   const begin = (simulated: boolean) => {
-    if (notificationPermission() === 'default') void requestNotificationPermission()
+    if (isNative()) void ensureNotificationPermission()
+    else if (notificationPermission() === 'default') void requestNotificationPermission()
     start(simulated, geo.position ?? undefined, inviteParam)
   }
 

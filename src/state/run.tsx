@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from 're
 import { useRunTracker } from '../lib/useGeo'
 import { useWakeLock } from '../lib/wakeLock'
 import { notificationPermission, vibrate } from '../lib/notify'
+import { isNative } from '../lib/native'
 import { closeRunNotification, showRunNotification } from '../lib/runNotice'
 
 type RunContext = ReturnType<typeof useRunTracker> & { wake: ReturnType<typeof useWakeLock> }
@@ -23,7 +24,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
     if (tracker.running && km > 0) vibrate([60, 40, 60])
   }, [km, tracker.running])
 
-  const notifyOn = tracker.running && notificationPermission() === 'granted'
+  // ในแอปมือถือใช้ LocalNotifications ซึ่งขอสิทธิ์ตอนกดเริ่มวิ่ง ไม่ต้องเช็ค Notification ของเว็บ
+  const notifyOn = tracker.running && (isNative() || notificationPermission() === 'granted')
   const latest = useRef({ distanceM: 0, elapsedMs: 0, paused: false })
   latest.current = { distanceM: tracker.distanceM, elapsedMs: tracker.elapsedMs, paused: tracker.paused }
   const halfMinute = Math.floor(tracker.elapsedMs / 30_000)

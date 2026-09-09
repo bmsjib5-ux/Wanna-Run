@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LatLng, TrackPoint } from '../types'
 import { distanceM, offset } from './geo'
+import { isNative, watchPositionNative } from './native'
 
 export type GeoStatus = 'idle' | 'locating' | 'ready' | 'denied' | 'unsupported' | 'error'
 
@@ -129,6 +130,7 @@ export function useRunTracker() {
   const [inviteId, setInviteId] = useState<string | undefined>(undefined)
 
   const watchId = useRef<number | null>(null)
+  const stopNative = useRef<(() => void) | null>(null)
   const simTimer = useRef<number | null>(null)
   const tickTimer = useRef<number | null>(null)
   const startedAt = useRef(0)
@@ -140,9 +142,11 @@ export function useRunTracker() {
 
   const clearAll = useCallback(() => {
     if (watchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId.current)
+    stopNative.current?.()
     if (simTimer.current) window.clearInterval(simTimer.current)
     if (tickTimer.current) window.clearInterval(tickTimer.current)
     watchId.current = null
+    stopNative.current = null
     simTimer.current = null
     tickTimer.current = null
   }, [])
@@ -189,6 +193,21 @@ export function useRunTracker() {
           cursor = offset(cursor, 3 + Math.random() * 0.8, simHeading.current)
           addPoint(cursor.lat, cursor.lng, 5)
         }, 1000)
+        return true
+      }
+
+      // ในแอปมือถือใช้ตัวติดตามเนทีฟ ซึ่งทำงานต่อแม้ย่อแอปหรือจอดับ
+      if (isNative()) {
+        stopNative.current = watchPositionNative(
+          (p) => {
+            if (p.accuracy > MAX_ACCURACY_M) {
+              setS((prev) => ({ ...prev, accuracy: p.accuracy }))
+              return
+            }
+            addPoint(p.lat, p.lng, p.accuracy)
+          },
+          (message) => setS((prev) => ({ ...prev, error: message })),
+        )
         return true
       }
 
@@ -241,7 +260,7 @@ export function useRunTracker() {
   // กู้คืนการวิ่งที่ค้างอยู่ตอนเปิดแอป และต่อแหล่งข้อมูลใหม่ถ้าถูกถอด
   // (StrictMode ในโหมดพัฒนาจะถอด/ใส่ effect ซ้ำ ทำให้ timer ถูกล้างทั้งที่สเตตยัง running)
   useEffect(() => {
-    const engaged = watchId.current !== null || simTimer.current !== null
+    const engaged = watchId.current !== null || simTimer.current !== null || stopNative.current !== null
     if (s.running) {
       if (!engaged) engage(s.simulated, s.path[s.path.length - 1] ?? undefined)
       return
