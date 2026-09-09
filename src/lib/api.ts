@@ -10,6 +10,16 @@ import type {
 } from '../types'
 import { requireSupabase } from './supabase'
 
+/** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
+function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 /** แถวโปรไฟล์ตามที่เก็บในฐานข้อมูล */
 type ProfileRow = {
   id: string
@@ -219,14 +229,17 @@ export async function createGroupRemote(
   const sb = requireSupabase()
   const uid = await currentUserId()
   if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
-  const { data, error } = await sb
+  // สร้าง id ฝั่งแอปแล้วไม่ขอค่ากลับ — เลี่ยง INSERT ... RETURNING ซึ่ง Postgres จะเอา
+  // policy ของ SELECT มาตรวจแถวใหม่ด้วย และฟังก์ชัน policy ที่เป็น stable
+  // ยังมองไม่เห็นแถวที่เพิ่งใส่ในสเตตเมนต์เดียวกัน
+  const id = newId()
+  const createdAt = Date.now()
+  const { error } = await sb
     .from('groups')
-    .insert({ owner: uid, name, emoji, description })
-    .select('id,created_at')
-    .single()
+    .insert({ id, owner: uid, name, emoji, description, created_at: new Date(createdAt).toISOString() })
   if (error) throw error
-  await setGroupMembers(data.id as string, memberIds)
-  return { id: data.id as string, name, emoji, description, memberIds, createdAt: new Date(data.created_at).getTime() }
+  await setGroupMembers(id, memberIds)
+  return { id, name, emoji, description, memberIds, createdAt }
 }
 
 export async function setGroupMembers(groupId: ID, memberIds: ID[]): Promise<void> {
@@ -338,28 +351,26 @@ export async function createInviteRemote(input: {
   const uid = await currentUserId()
   if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
 
-  const { data, error } = await sb
-    .from('invites')
-    .insert({
-      host: uid,
-      title: input.title,
-      note: input.note,
-      place_name: input.place.name,
-      place_area: input.place.area,
-      lat: input.place.lat,
-      lng: input.place.lng,
-      start_at: new Date(input.startAt).toISOString(),
-      target_km: input.targetKm,
-      group_id: input.groupId ?? null,
-    })
-    .select('id')
-    .single()
+  const id = newId()
+  const { error } = await sb.from('invites').insert({
+    id,
+    host: uid,
+    title: input.title,
+    note: input.note,
+    place_name: input.place.name,
+    place_area: input.place.area,
+    lat: input.place.lat,
+    lng: input.place.lng,
+    start_at: new Date(input.startAt).toISOString(),
+    target_km: input.targetKm,
+    group_id: input.groupId ?? null,
+  })
   if (error) throw error
 
   // เจ้าภาพนับเป็นไปแน่นอน ส่วนคนที่ถูกชวนเริ่มจากยังไม่ตอบ
   const rows = [
-    { invite_id: data.id as string, member: uid, reply: 'going' as InviteReply },
-    ...input.inviteeIds.map((member) => ({ invite_id: data.id as string, member, reply: null })),
+    { invite_id: id, member: uid, reply: 'going' as InviteReply },
+    ...input.inviteeIds.map((member) => ({ invite_id: id, member, reply: null })),
   ]
   const { error: rErr } = await sb.from('invite_replies').insert(rows)
   if (rErr) throw rErr

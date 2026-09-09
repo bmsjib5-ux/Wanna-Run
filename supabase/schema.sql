@@ -303,7 +303,10 @@ create policy friendships_delete on public.friendships for delete
 
 -- groups: เจ้าของแก้ได้ สมาชิกเห็นได้
 drop policy if exists groups_select on public.groups;
-create policy groups_select on public.groups for select using (public.in_group(id));
+-- เช็คคอลัมน์ตรง ๆ ก่อนเรียกฟังก์ชัน: เร็วกว่า และเจ้าของยังอ่านแถวของตัวเองได้
+-- แม้ในสเตตเมนต์ INSERT ... RETURNING ที่ฟังก์ชัน stable ยังมองไม่เห็นแถวใหม่
+create policy groups_select on public.groups for select
+  using (owner = auth.uid() or public.in_group(id));
 
 drop policy if exists groups_insert on public.groups;
 create policy groups_insert on public.groups for insert with check (owner = auth.uid());
@@ -330,7 +333,7 @@ create policy group_members_delete on public.group_members for delete
 -- invites: เจ้าภาพจัดการได้ ผู้ถูกชวนและสมาชิกกลุ่มเห็นได้
 drop policy if exists invites_select on public.invites;
 create policy invites_select on public.invites for select
-  using (public.can_see_invite(id));
+  using (host = auth.uid() or public.can_see_invite(id));
 
 drop policy if exists invites_insert on public.invites;
 create policy invites_insert on public.invites for insert with check (host = auth.uid());
@@ -344,8 +347,9 @@ create policy invites_delete on public.invites for delete using (host = auth.uid
 
 -- invite_replies: เจ้าภาพเห็นทุกคำตอบ แต่ละคนแก้ได้เฉพาะคำตอบตัวเอง
 drop policy if exists invite_replies_select on public.invite_replies;
+-- ใครที่เห็นคำชวนได้ ย่อมเห็นได้ด้วยว่าใครตอบรับบ้าง ไม่ใช่เห็นแค่คำตอบของตัวเอง
 create policy invite_replies_select on public.invite_replies for select
-  using (member = auth.uid() or public.is_invite_host(invite_id));
+  using (member = auth.uid() or public.can_see_invite(invite_id));
 
 drop policy if exists invite_replies_insert on public.invite_replies;
 create policy invite_replies_insert on public.invite_replies for insert
