@@ -8,6 +8,8 @@ type AuthCtx = {
   signUp: (email: string, password: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
   signOut: () => Promise<void>
+  /** ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมล */
+  resetPassword: (email: string) => Promise<string | null>
 }
 
 const Ctx = createContext<AuthCtx | null>(null)
@@ -53,6 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         await supabase?.auth.signOut()
+      },
+      async resetPassword(email) {
+        if (!supabase) return 'ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์'
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${location.origin}/`,
+        })
+        return error ? describeAuthError(error.message) : null
       },
     }),
     [session, loading],
