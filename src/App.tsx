@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { StoreProvider, useStore } from './state/store'
 import { AuthProvider, useAuth } from './state/auth'
 import { isCloudConfigured } from './lib/supabase'
+import { takeCodeFromUrl } from './lib/friendLink'
 import Auth from './screens/Auth'
 import Toaster from './components/Toaster'
 import Onboarding from './screens/Onboarding'
@@ -47,6 +48,12 @@ function Shell() {
     window.scrollTo({ top: 0 })
   }, [])
 
+  // เปิดจากลิงก์ QR (?add=RUN-XXXX) ให้เด้งไปหน้าเพิ่มเพื่อนทันที
+  useEffect(() => {
+    const code = takeCodeFromUrl()
+    if (code) nav('friends', { add: code })
+  }, [nav])
+
   // ปุ่มย้อนกลับของเบราว์เซอร์ให้กลับมาหน้าหลักแทนการออกจากแอป
   useEffect(() => {
     if (route === 'home') return
@@ -65,7 +72,7 @@ function Shell() {
     <div className="shell">
       <main className="page">
         {route === 'home' && <Home nav={nav} />}
-        {route === 'friends' && <Friends nav={nav} />}
+        {route === 'friends' && <Friends nav={nav} addCode={params.add} />}
         {route === 'groups' && <Groups nav={nav} focusId={params.id} />}
         {route === 'invites' && <Invites nav={nav} openNew={params.new === '1'} />}
         {route === 'run' && <RunScreen nav={nav} inviteId={params.inviteId} />}

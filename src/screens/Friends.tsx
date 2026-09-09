@@ -1,20 +1,41 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import StatusDot from '../components/StatusDot'
+import QrCode from '../components/QrCode'
+import QrScanner from '../components/QrScanner'
+import { friendLink } from '../lib/friendLink'
 import { useStore } from '../state/store'
 import { agoLabel } from '../lib/format'
 import { paceLabel } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import type { Friend } from '../types'
 
-export default function Friends({ nav }: { nav: Nav }) {
+export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }) {
   const { state, actions } = useStore()
   const [query, setQuery] = useState('')
   const [addOpen, setAddOpen] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [code, setCode] = useState('')
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const submit = (value: string) => {
+    const res = actions.addFriendByCode(value)
+    setMsg({ ok: res.ok, text: res.message })
+    if (res.ok) setCode('')
+    return res.ok
+  }
+
+  // มาจากการสแกน QR ด้วยกล้องของเครื่อง (ลิงก์ ?add=RUN-XXXX)
+  useEffect(() => {
+    if (!addCode) return
+    setAddOpen(true)
+    setCode(addCode)
+    submit(addCode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addCode])
 
   const match = (f: Friend) =>
     !query.trim() || f.name.includes(query.trim()) || f.code.includes(query.trim().toUpperCase())
@@ -28,10 +49,20 @@ export default function Friends({ nav }: { nav: Nav }) {
   )
   const suggested = state.friends.filter((f) => f.status === 'suggested' && match(f))
 
-  const submitCode = () => {
-    const res = actions.addFriendByCode(code)
-    setMsg({ ok: res.ok, text: res.message })
-    if (res.ok) setCode('')
+  const shareCode = async () => {
+    const url = friendLink(state.profile.code)
+    const text = `เพิ่มฉันใน Wanna Run? รหัส ${state.profile.code}`
+    const withShare = navigator as Navigator & { share?: (d: ShareData) => Promise<void> }
+    if (withShare.share) {
+      withShare.share({ title: 'Wanna Run?', text, url }).catch(() => undefined)
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`)
+      pushNotice('คัดลอกลิงก์แล้ว', 'วางส่งให้เพื่อนได้เลย')
+    } catch {
+      pushNotice('ลิงก์เพิ่มเพื่อน', url)
+    }
   }
 
   const copyCode = async () => {
@@ -63,6 +94,9 @@ export default function Friends({ nav }: { nav: Nav }) {
             {state.profile.code}
           </div>
         </div>
+        <button className="btn sm" onClick={() => setQrOpen(true)} aria-label="แสดงคิวอาร์โค้ดของฉัน">
+          ⬛ QR
+        </button>
         <button className="btn sm" onClick={copyCode}>
           คัดลอก
         </button>
@@ -132,9 +166,12 @@ export default function Friends({ nav }: { nav: Nav }) {
           <div className="big">👟</div>
           ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> ให้เพื่อน
           หรือขอรหัสเขามากรอกก็ได้
-          <div style={{ marginTop: 14 }}>
-            <button className="btn primary sm" onClick={() => setAddOpen(true)}>
-              เพิ่มด้วยรหัสเพื่อน
+          <div className="row" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
+            <button className="btn primary sm" onClick={() => { setAddOpen(true); setScanning(true) }}>
+              📷 สแกน QR
+            </button>
+            <button className="btn sm" onClick={() => setAddOpen(true)}>
+              กรอกรหัส
             </button>
           </div>
         </div>
@@ -172,33 +209,78 @@ export default function Friends({ nav }: { nav: Nav }) {
 
       <Sheet
         open={addOpen}
-        title="เพิ่มเพื่อนด้วยรหัส"
-        subtitle="ขอรหัส 4 ตัวจากเพื่อน แล้วกรอกที่นี่ได้เลย"
+        title={scanning ? 'สแกน QR ของเพื่อน' : 'เพิ่มเพื่อนด้วยรหัส'}
+        subtitle={scanning ? 'ให้เพื่อนเปิด QR ของเขาขึ้นมา แล้วเล็งกล้องไปที่โค้ด' : 'สแกน QR หรือกรอกรหัส 4 ตัวจากเพื่อน'}
         onClose={() => {
           setAddOpen(false)
+          setScanning(false)
           setMsg(null)
         }}
       >
-        <label className="field">
-          <span>รหัสเพื่อน</span>
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="RUN-7KQ2"
-            maxLength={8}
-            autoFocus
+        {scanning ? (
+          <QrScanner
+            onFound={(found) => {
+              setScanning(false)
+              setCode(found)
+              submit(found)
+            }}
+            onCancel={() => setScanning(false)}
           />
-        </label>
-        {msg && (
-          <div className={`chip ${msg.ok ? 'ok' : 'bad'}`} style={{ marginBottom: 14 }}>
-            {msg.text}
-          </div>
+        ) : (
+          <>
+            <button className="btn primary block" style={{ marginBottom: 16 }} onClick={() => { setMsg(null); setScanning(true) }}>
+              📷 เปิดกล้องสแกน QR
+            </button>
+
+            <label className="field">
+              <span>หรือกรอกรหัสเพื่อน</span>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="RUN-7KQ2"
+                maxLength={8}
+              />
+            </label>
+            {msg && (
+              <div className={`chip ${msg.ok ? 'ok' : 'bad'}`} style={{ marginBottom: 14 }}>
+                {msg.text}
+              </div>
+            )}
+            <button className="btn block" onClick={() => submit(code)} disabled={code.trim().length < 4}>
+              ส่งคำขอเป็นเพื่อน
+            </button>
+            <div className="card tight muted small" style={{ marginTop: 14, lineHeight: 1.65 }}>
+              รหัสของคุณคือ <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> — กดปุ่ม QR ด้านบนให้เพื่อนสแกนก็ได้
+            </div>
+          </>
         )}
-        <button className="btn primary block" onClick={submitCode} disabled={code.trim().length < 4}>
-          ส่งคำขอเป็นเพื่อน
-        </button>
+      </Sheet>
+
+      <Sheet
+        open={qrOpen}
+        title="QR ของฉัน"
+        subtitle="ให้เพื่อนสแกนโค้ดนี้เพื่อเพิ่มคุณเข้าก๊วน"
+        onClose={() => setQrOpen(false)}
+      >
+        <div className="center">
+          <QrCode value={friendLink(state.profile.code)} />
+          <div className="strong" style={{ fontSize: 24, letterSpacing: 2, marginTop: 16 }}>
+            {state.profile.code}
+          </div>
+          <div className="muted small" style={{ marginTop: 4 }}>
+            {state.profile.emoji} {state.profile.name}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 8, marginTop: 18 }}>
+          <button className="btn grow" onClick={copyCode}>
+            คัดลอกรหัส
+          </button>
+          <button className="btn primary grow" onClick={shareCode}>
+            แชร์ให้เพื่อน
+          </button>
+        </div>
         <div className="card tight muted small" style={{ marginTop: 14, lineHeight: 1.65 }}>
-          รหัสของคุณคือ <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> — ส่งให้เพื่อนเพื่อให้เขาเพิ่มคุณกลับได้
+          สแกนด้วยกล้องของเครื่องก็ได้ โค้ดนี้เป็นลิงก์ที่เปิดแอปมาที่หน้าเพิ่มเพื่อนให้อัตโนมัติ
         </div>
       </Sheet>
     </>
