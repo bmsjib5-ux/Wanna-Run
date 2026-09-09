@@ -23,6 +23,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+          # เก็บแคชของ Gradle ไว้ รอบถัดไปไม่ต้องโหลดไลบรารีใหม่ทั้งหมด
+          cache: gradle
 
       - name: ติดตั้งแพ็กเกจ
         run: npm ci
