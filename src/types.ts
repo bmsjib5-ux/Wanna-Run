@@ -33,6 +33,8 @@ export type Friend = {
   home: LatLng
   sharingLocation: boolean
   lastActiveAt: number
+  /** แอปเปิดอยู่ (ตั้งจาก heartbeat, ปิดทันทีเมื่อถูกย่อ) — undefined ถ้าฐานข้อมูลยังไม่มีคอลัมน์ */
+  online?: boolean
 }
 
 export type Group = {

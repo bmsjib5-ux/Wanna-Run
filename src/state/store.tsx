@@ -222,31 +222,16 @@ export function StoreProvider({
         setState((s) => {
           const friend = s.friends.find((f) => f.id === row.id)
           if (!friend) return s
-          const seenAt = api.heartbeatOnly(row, friend)
-          if (seenAt === null) return s
+          const seen = api.heartbeatOnly(row, friend)
+          if (seen === null) return s
           patched = true
-          if (seenAt === friend.lastActiveAt) return s
-          return { ...s, friends: s.friends.map((f) => (f.id === row.id ? { ...f, lastActiveAt: seenAt } : f)) }
+          if (seen.lastActiveAt === friend.lastActiveAt && seen.online === friend.online) return s
+          return { ...s, friends: s.friends.map((f) => (f.id === row.id ? { ...f, ...seen } : f)) }
         })
         if (patched) return
       }
       void refresh()
     })
-
-    // heartbeat บอกเพื่อนว่ายังออนไลน์ ส่งตอนเปิดอยู่ และยิงครั้งสุดท้ายตอนถูกย่อ
-    // (เบราว์เซอร์มือถือหยุด JS ของแท็บเบื้องหลัง จึงสัญญาว่าออนไลน์ต่อไม่ได้)
-    const beat = (keepalive = false) => api.touchPresence(keepalive).catch(() => undefined)
-    void beat()
-    const heart = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void beat()
-    }, HEARTBEAT_MS)
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') void beat(true)
-      else void beat()
-    }
-    document.addEventListener('visibilitychange', onHide)
-    const onLeave = () => void beat(true)
-    window.addEventListener('pagehide', onLeave)
 
     // Realtime ผ่าน websocket อาจต่อไม่ได้ (เน็ตองค์กร พร็อกซี มือถือสลับสัญญาณ)
     // จึงถามซ้ำเป็นระยะและตอนกลับมาโฟกัสหน้าจอ เพื่อไม่ให้ข้อมูลค้างเมื่อ websocket หลุด
@@ -256,6 +241,21 @@ export function StoreProvider({
     }
     document.addEventListener('visibilitychange', onWake)
     window.addEventListener('focus', onWake)
+
+    // heartbeat บอกเพื่อนว่ายังออนไลน์ ส่งตอนเปิดอยู่ และบอกลา (online=false) ทันทีตอนถูกย่อ/ปิด
+    // (เบราว์เซอร์มือถือหยุด JS ของแท็บเบื้องหลัง จึงสัญญาว่าออนไลน์ต่อไม่ได้)
+    const beat = (online: boolean, keepalive = false) => api.touchPresence(online, keepalive).catch(() => undefined)
+    void beat(true)
+    const heart = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void beat(true)
+    }, HEARTBEAT_MS)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void beat(false, true)
+      else void beat(true)
+    }
+    const onLeave = () => void beat(false, true)
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', onLeave)
 
     return () => {
       unsubscribe()

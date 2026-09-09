@@ -35,7 +35,7 @@ export default function Home({ nav }: { nav: Nav }) {
   const doneToday = missions.filter((m) => m.progress >= m.target).length
 
   const now = useNow()
-  const online = friends.filter((f) => f.status === 'friend' && isOnline(f.lastActiveAt, now))
+  const online = friends.filter((f) => f.status === 'friend' && isOnline(f, now))
   const sharing = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
   const pending = friends.filter((f) => f.status === 'incoming').length
 

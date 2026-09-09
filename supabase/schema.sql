@@ -19,6 +19,7 @@ create table if not exists public.profiles (
   avatar_url        text,
   sharing_location  boolean not null default false,
   last_active_at    timestamptz not null default now(),
+  is_online         boolean not null default false,
   created_at        timestamptz not null default now()
 );
 
@@ -407,3 +408,21 @@ end $$;
 
 -- ให้ realtime ส่งค่าเดิมมาด้วยตอนแถวถูกลบ/แก้ (จำเป็นสำหรับ filter ฝั่ง client)
 alter table public.locations replica identity full;
+
+-- ---------- สถานะออนไลน์ (ดู presence.sql) ----------
+alter table public.profiles add column if not exists is_online boolean not null default false;
+
+create or replace function public.touch_presence(p_online boolean default true)
+returns timestamptz
+language sql
+security definer
+set search_path = public
+as $$
+  update public.profiles
+     set last_active_at = now(),
+         is_online      = p_online
+   where id = auth.uid()
+  returning now();
+$$;
+revoke all on function public.touch_presence(boolean) from public;
+grant execute on function public.touch_presence(boolean) to authenticated;

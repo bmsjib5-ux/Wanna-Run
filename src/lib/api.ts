@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import { requireSupabase } from './supabase'
 import { squareThumbnail } from './image'
+import { setServerTime } from './presence'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
 function newId(): string {
@@ -34,6 +35,7 @@ type ProfileRow = {
   avg_pace_sec: number | null
   sharing_location: boolean
   last_active_at: string
+  is_online?: boolean | null
   created_at: string
 }
 
@@ -71,6 +73,7 @@ function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Frie
     home,
     sharingLocation: row.sharing_location,
     lastActiveAt: new Date(row.last_active_at).getTime(),
+    online: row.is_online ?? undefined,
   }
 }
 
@@ -133,25 +136,48 @@ export async function updateMyProfile(patch: Partial<Profile>): Promise<void> {
 }
 
 /**
- * heartbeat บอกว่ายังเปิดแอปอยู่ — เพื่อนใช้คำนวณสถานะออนไลน์
- * ตอนถูกย่อหน้าจอเบราว์เซอร์อาจหยุด JS ทันที จึงยิงตรงด้วย fetch keepalive
- * ที่ระบบจะส่งให้จนจบแม้หน้าเว็บปิดไปแล้ว (sendBeacon ใส่ header ไม่ได้)
+ * heartbeat บอกว่ายังเปิดแอปอยู่ (online=true) หรือกำลังจะไป (online=false)
+ * ใช้ fetch ตรงแทน supabase-js เพราะตอนถูกย่อหน้าจอเบราว์เซอร์อาจหยุด JS ทันที
+ * keepalive ทำให้ระบบส่งคำขอให้จนจบแม้หน้าเว็บปิดไปแล้ว (sendBeacon ใส่ header ไม่ได้)
+ *
+ * เรียก touch_presence() ให้เซิร์ฟเวอร์ประทับเวลาเอง แล้วเอาเวลาที่คืนมาเทียบนาฬิกาเครื่อง
+ * ถ้าฐานข้อมูลยังไม่มีฟังก์ชันนี้ (ยังไม่ได้รัน presence.sql) จะถอยไปอัปเดตคอลัมน์ตรง ๆ
  */
-export async function touchPresence(keepalive = false): Promise<void> {
+let presenceRpcMissing = false
+
+export async function touchPresence(online = true, keepalive = false): Promise<void> {
   const sb = requireSupabase()
   const { data } = await sb.auth.getSession()
   const session = data.session
   if (!session) return
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`
-  const res = await fetch(url, {
+  const base = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, '')
+  const headers = {
+    apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+    Authorization: `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  }
+
+  if (!presenceRpcMissing) {
+    const res = await fetch(`${base}/rest/v1/rpc/touch_presence`, {
+      method: 'POST',
+      keepalive,
+      headers,
+      body: JSON.stringify({ p_online: online }),
+    })
+    if (res.ok) {
+      const serverTime = (await res.json()) as string
+      setServerTime(serverTime)
+      return
+    }
+    // 404 = ยังไม่มีฟังก์ชัน ใช้แบบเก่าไปก่อนและไม่ต้องลองอีก
+    if (res.status !== 404) throw new Error(`heartbeat ล้มเหลว (${res.status})`)
+    presenceRpcMissing = true
+  }
+
+  const res = await fetch(`${base}/rest/v1/profiles?id=eq.${session.user.id}`, {
     method: 'PATCH',
     keepalive,
-    headers: {
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
+    headers: { ...headers, Prefer: 'return=minimal' },
     body: JSON.stringify({ last_active_at: new Date().toISOString() }),
   })
   if (!res.ok) throw new Error(`heartbeat ล้มเหลว (${res.status})`)
@@ -504,10 +530,10 @@ export function subscribeToChanges(
 
 
 /**
- * เช็คว่าแถวโปรไฟล์ที่เปลี่ยนคือแค่ heartbeat ของเพื่อนคนนี้หรือเปล่า
- * ถ้าใช่ คืนเวลาที่เห็นล่าสุดให้เอาไปแปะในสเตตได้เลย ไม่ต้องดึงทั้งชุดใหม่
+ * เช็คว่าแถวโปรไฟล์ที่เปลี่ยนคือแค่สถานะออนไลน์ของเพื่อนคนนี้หรือเปล่า
+ * ถ้าใช่ คืนค่าที่ต้องแปะในสเตตให้เลย ไม่ต้องดึงทั้งชุดใหม่
  */
-export function heartbeatOnly(row: ChangeRow, friend: Friend): number | null {
+export function heartbeatOnly(row: ChangeRow, friend: Friend): Pick<Friend, 'lastActiveAt' | 'online'> | null {
   if (row.id !== friend.id || typeof row.last_active_at !== 'string') return null
   const same =
     row.name === friend.name &&
@@ -517,7 +543,11 @@ export function heartbeatOnly(row: ChangeRow, friend: Friend): number | null {
     Math.round(Number(row.total_km ?? 0)) === friend.totalKm &&
     (row.avg_pace_sec ?? 360) === friend.avgPaceSec &&
     (row.bio ?? '') === friend.bio
-  return same ? new Date(row.last_active_at).getTime() : null
+  if (!same) return null
+  return {
+    lastActiveAt: new Date(row.last_active_at).getTime(),
+    online: typeof row.is_online === 'boolean' ? row.is_online : undefined,
+  }
 }
 
 // ---------- รูปโปรไฟล์ ----------

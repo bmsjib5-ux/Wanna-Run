@@ -320,7 +320,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={isOnline(f.lastActiveAt, now)} />
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={isOnline(f, now)} />
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>

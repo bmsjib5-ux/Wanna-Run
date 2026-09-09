@@ -7,8 +7,8 @@ import QrCode from '../components/QrCode'
 import QrScanner from '../components/QrScanner'
 import { friendLink } from '../lib/friendLink'
 import { isOnline, presenceLabel, useNow } from '../lib/presence'
+import PresenceBadge from '../components/PresenceBadge'
 import { useStore } from '../state/store'
-import { agoLabel } from '../lib/format'
 import { paceLabel } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import type { Friend } from '../types'
@@ -302,7 +302,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
 function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemove: () => void }) {
   const [open, setOpen] = useState(false)
   const now = useNow()
-  const online = isOnline(friend.lastActiveAt, now)
+  const online = isOnline(friend, now)
   return (
     <>
       <button className="list-btn" onClick={() => setOpen(true)}>
@@ -312,16 +312,17 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
             {friend.name}
           </span>
           <span className="muted small">
-            {friend.totalKm} กม. · {paceLabel(friend.avgPaceSec)} · {online ? 'ออนไลน์' : agoLabel(friend.lastActiveAt)}
-            {friend.sharingLocation ? ' · 📍' : ''}
+            {friend.totalKm} กม. · {paceLabel(friend.avgPaceSec)}
+            {friend.sharingLocation ? ' · 📍 แชร์ตำแหน่ง' : ''}
           </span>
         </span>
+        <PresenceBadge presence={friend} now={now} />
       </button>
 
       <Sheet
         open={open}
         title={`${friend.emoji} ${friend.name}`}
-        subtitle={`${online ? '🟢' : '⚪'} ${presenceLabel(friend.lastActiveAt, now)}${friend.sharingLocation ? ' · 📍 แชร์ตำแหน่ง' : ''}${friend.bio ? ` · ${friend.bio}` : ''}`}
+        subtitle={`${online ? '🟢' : '⚪'} ${presenceLabel(friend, now)}${friend.sharingLocation ? ' · 📍 แชร์ตำแหน่ง' : ''}${friend.bio ? ` · ${friend.bio}` : ''}`}
         onClose={() => setOpen(false)}
       >
         <div className="card">
