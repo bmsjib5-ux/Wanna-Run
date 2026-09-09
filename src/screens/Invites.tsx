@@ -9,6 +9,7 @@ import Avatar from '../components/Avatar'
 import { useStore } from '../state/store'
 import { fromLocalInput, toLocalInput, whenLabel } from '../lib/format'
 import { PLACES } from '../lib/seed'
+import { directionsUrl } from '../lib/geo'
 import type { ID, Place, RunInvite } from '../types'
 
 const TARGETS = [3, 5, 10, 15, 21]
@@ -85,6 +86,15 @@ export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean 
                 <span className="chip">🎯 {live.targetKm} กม.</span>
               </div>
               {live.note && <div className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>“{live.note}”</div>}
+              <a
+                className="btn block sm"
+                style={{ marginTop: 12, textDecoration: 'none' }}
+                href={directionsUrl({ lat: live.place.lat, lng: live.place.lng })}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                🧭 นำทางไปจุดนัดพบด้วย Google Maps
+              </a>
             </div>
 
             <div className="section-title">ใครไปบ้าง</div>

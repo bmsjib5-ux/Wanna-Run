@@ -1,6 +1,7 @@
 @import 'leaflet/dist/leaflet.css';
 
 :root {
+  /* ---- ธีมมืด (ค่าเริ่มต้น) ---- */
   --bg: #0b0f14;
   --bg-soft: #121924;
   --surface: #161f2c;
@@ -8,12 +9,30 @@
   --line: #26344a;
   --text: #eaf1f8;
   --muted: #8fa3bd;
-  --accent: #c6f24e;
-  --accent-ink: #16210a;
-  --accent-2: #4ee1c1;
   --danger: #ff6b6b;
   --warn: #ffc44d;
   --ok: #58e08a;
+
+  /* สีพื้นเสริมที่เคยฝังเป็นตัวเลขไว้ตามจุดต่าง ๆ */
+  --bg-rgb: 11, 15, 20;
+  --glow: #1b2a3d;
+  --overlay: rgba(4, 7, 11, .66);
+  --toast-bg: rgba(29, 40, 54, .97);
+  --nav-bg: rgba(15, 21, 30, .92);
+  --arena-from: #1b2836;
+  --arena-to: #10161f;
+  --scanner-bg: #05080c;
+  --map-bg: #0e141c;
+  --map-grid: rgba(38, 52, 74, .5);
+
+  /* ---- สีหลัก (เปลี่ยนได้ผ่าน data-accent) ---- */
+  --accent: #c6f24e;
+  --accent-2: #4ee1c1;
+  --accent-rgb: 198, 242, 78;
+  --accent-ink: #16210a;
+  /* สี accent สำหรับตัวหนังสือ/เส้นบาง — ธีมสว่างต้องเข้มกว่าเพราะสีอ่อนบนพื้นขาวจะจาง */
+  --accent-text: var(--accent);
+
   --radius: 18px;
   --shell: 480px;
   --nav-h: 68px;
@@ -24,6 +43,50 @@
   background: var(--bg);
 }
 
+/* ---- ธีมสว่าง ---- */
+:root[data-theme="light"] {
+  --bg: #f3f6fa;
+  --bg-soft: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --line: #d8e0ea;
+  --text: #121a24;
+  --muted: #5d6c80;
+  --danger: #d9434e;
+  --warn: #b8791a;
+  --ok: #1f9d5a;
+
+  --bg-rgb: 243, 246, 250;
+  --glow: #dfe9f5;
+  --overlay: rgba(20, 30, 45, .45);
+  --toast-bg: rgba(255, 255, 255, .97);
+  --nav-bg: rgba(255, 255, 255, .92);
+  --arena-from: #ffffff;
+  --arena-to: #e6edf5;
+  --scanner-bg: #1a222c;
+  --map-bg: #e9eef4;
+  --map-grid: rgba(150, 165, 185, .35);
+
+  --accent-text: #5f7f00;
+  color-scheme: light;
+}
+:root[data-theme="light"][data-accent="mint"]   { --accent-text: #0b7a62; }
+:root[data-theme="light"][data-accent="sky"]    { --accent-text: #0a6ea8; }
+:root[data-theme="light"][data-accent="violet"] { --accent-text: #6a3fd1; }
+:root[data-theme="light"][data-accent="rose"]   { --accent-text: #c4225e; }
+:root[data-theme="light"][data-accent="coral"]  { --accent-text: #c84a1a; }
+
+/* ---- สีหลักให้เลือก ---- */
+:root[data-accent="sky"]    { --accent: #5cc8ff; --accent-2: #7f8cff; --accent-rgb: 92, 200, 255;  --accent-ink: #061a28; }
+:root[data-accent="coral"]  { --accent: #ff8a5c; --accent-2: #ffc44d; --accent-rgb: 255, 138, 92;  --accent-ink: #2a1006; }
+:root[data-accent="violet"] { --accent: #b48cff; --accent-2: #ff7ad9; --accent-rgb: 180, 140, 255; --accent-ink: #1b0f33; }
+:root[data-accent="rose"]   { --accent: #ff7aa8; --accent-2: #ffb26b; --accent-rgb: 255, 122, 168; --accent-ink: #33101c; }
+:root[data-accent="mint"]   { --accent: #4ee1c1; --accent-2: #5cc8ff; --accent-rgb: 78, 225, 193;  --accent-ink: #062119; }
+
+/* ธีมสว่างต้องการสีหลักเข้มขึ้นเล็กน้อยให้ตัวหนังสือบนปุ่มอ่านออก */
+:root[data-theme="light"][data-accent="sky"]  { --accent-ink: #04131f; }
+:root[data-theme="light"][data-accent="mint"] { --accent-ink: #04170f; }
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body, #root { height: 100%; }
@@ -31,14 +94,14 @@ html, body, #root { height: 100%; }
 body {
   margin: 0;
   background:
-    radial-gradient(1000px 520px at 50% -10%, #1b2a3d 0%, transparent 70%),
+    radial-gradient(1000px 520px at 50% -10%, var(--glow) 0%, transparent 70%),
     var(--bg);
   overscroll-behavior-y: none;
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; }
-a { color: var(--accent); }
+a { color: var(--accent-text); }
 
 /* ---------- โครงหน้าจอ ---------- */
 .shell {
@@ -67,7 +130,7 @@ a { color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(180deg, rgba(11,15,20,.96), rgba(11,15,20,.72) 70%, transparent);
+  background: linear-gradient(180deg, rgba(var(--bg-rgb), .96), rgba(var(--bg-rgb), .72) 70%, transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -80,7 +143,7 @@ a { color: var(--accent); }
   width: 36px; height: 36px; border-radius: 12px;
   display: grid; place-items: center; font-size: 19px;
   background: linear-gradient(140deg, var(--accent), var(--accent-2));
-  box-shadow: 0 6px 18px rgba(198,242,78,.24);
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), .24);
 }
 
 /* ---------- แถบเมนูล่าง ---------- */
@@ -93,7 +156,7 @@ a { color: var(--accent); }
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  background: rgba(15,21,30,.92);
+  background: var(--nav-bg);
   backdrop-filter: blur(18px);
   border-top: 1px solid var(--line);
   z-index: 40;
@@ -105,14 +168,14 @@ a { color: var(--accent); }
   transition: color .16s;
 }
 .nav button .ico { font-size: 21px; line-height: 1; transition: transform .18s; }
-.nav button.on { color: var(--accent); }
+.nav button.on { color: var(--accent-text); }
 .nav button.on .ico { transform: translateY(-2px) scale(1.08); }
 .nav .fab {
   width: 54px; height: 54px; border-radius: 50%;
   background: linear-gradient(140deg, var(--accent), var(--accent-2));
   color: var(--accent-ink); display: grid; place-items: center;
   font-size: 22px; margin: -18px auto 0;
-  box-shadow: 0 10px 26px rgba(198,242,78,.3);
+  box-shadow: 0 10px 26px rgba(var(--accent-rgb), .3);
   font-weight: 700;
 }
 
@@ -133,7 +196,7 @@ a { color: var(--accent); }
   text-transform: none; letter-spacing: .2px;
 }
 .section-title .spacer { flex: 1; }
-.section-title button { color: var(--accent); font-size: 13px; font-weight: 600; }
+.section-title button { color: var(--accent-text); font-size: 13px; font-weight: 600; }
 
 .row { display: flex; align-items: center; gap: 12px; }
 .col { display: flex; flex-direction: column; }
@@ -203,7 +266,7 @@ a { color: var(--accent); }
   padding: 5px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
   background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
 }
-.chip.on { background: rgba(198,242,78,.14); border-color: rgba(198,242,78,.4); color: var(--accent); }
+.chip.on { background: rgba(var(--accent-rgb), .14); border-color: rgba(var(--accent-rgb), .4); color: var(--accent-text); }
 .chip.ok { color: var(--ok); border-color: rgba(88,224,138,.35); background: rgba(88,224,138,.1); }
 .chip.warn { color: var(--warn); border-color: rgba(255,196,77,.35); background: rgba(255,196,77,.1); }
 .chip.bad { color: var(--danger); border-color: rgba(255,107,107,.3); background: rgba(255,107,107,.1); }
@@ -238,7 +301,7 @@ a { color: var(--accent); }
 
 /* ---------- แผ่นเลื่อนขึ้น (bottom sheet) ---------- */
 .sheet-backdrop {
-  position: fixed; inset: 0; background: rgba(4,7,11,.66);
+  position: fixed; inset: 0; background: var(--overlay);
   backdrop-filter: blur(3px); z-index: 60;
   animation: fade .18s ease;
   display: flex; align-items: flex-end; justify-content: center;
@@ -264,7 +327,7 @@ a { color: var(--accent); }
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .toast {
-  background: rgba(29,40,54,.97); border: 1px solid var(--line);
+  background: var(--toast-bg); border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
   border-radius: 14px; padding: 11px 14px;
   box-shadow: 0 12px 30px rgba(0,0,0,.4);
@@ -282,18 +345,21 @@ a { color: var(--accent); }
   border: 1px solid var(--line);
   position: relative; z-index: 0; isolation: isolate;
 }
-.map-full { height: calc(100dvh - var(--nav-h) - 128px); min-height: 340px; }
+/* แผนที่สูง 70% ของจอ เหลือพื้นที่ให้เห็นเมนูล่างและการ์ดควบคุมใต้แผนที่ */
+.map-full { height: 70dvh; min-height: 280px; }
 .leaflet-container {
   font: inherit;
-  /* ตารางจาง ๆ ไว้เป็นพื้นหลัง เผื่อโหลด tile ไม่ได้จะได้ไม่เห็นเป็นกล่องดำเปล่า */
+  /* ตารางจาง ๆ ไว้เป็นพื้นหลัง เผื่อโหลด tile ไม่ได้จะได้ไม่เห็นเป็นกล่องเปล่า */
   background:
-    linear-gradient(rgba(38,52,74,.5) 1px, transparent 1px) 0 0 / 44px 44px,
-    linear-gradient(90deg, rgba(38,52,74,.5) 1px, transparent 1px) 0 0 / 44px 44px,
-    #0e141c;
+    linear-gradient(var(--map-grid) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, var(--map-grid) 1px, transparent 1px) 0 0 / 44px 44px,
+    var(--map-bg);
 }
-.leaflet-control-attribution { background: rgba(11,15,20,.7) !important; color: #7b8ca3 !important; font-size: 9px !important; }
-.leaflet-control-attribution a { color: #9fb2c9 !important; }
-.leaflet-bar a { background: var(--surface) !important; color: var(--text) !important; border-color: var(--line) !important; }
+.leaflet-bottom.leaflet-right { margin-bottom: 26px; }
+.leaflet-touch .leaflet-bar a { width: 36px; height: 36px; line-height: 36px; font-size: 18px; }
+.leaflet-control-attribution { background: rgba(var(--bg-rgb), .75) !important; color: var(--muted) !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: var(--text) !important; }
+.leaflet-bar a { background: var(--surface) !important; color: var(--text) !important; border-bottom-color: var(--line) !important; }
 .pin { display: grid; place-items: center; font-size: 20px; }
 .pin .bubble {
   width: 34px; height: 34px; border-radius: 50%;
@@ -310,7 +376,7 @@ a { color: var(--accent); }
 }
 .pin .tag {
   margin-top: 2px; font-size: 10px; font-weight: 700; white-space: nowrap;
-  background: rgba(11,15,20,.85); padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line);
+  background: rgba(var(--bg-rgb), .88); padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line);
 }
 
 /* ---------- สแกน QR ---------- */
@@ -321,7 +387,7 @@ a { color: var(--accent); }
   max-height: 62dvh;
   border-radius: var(--radius);
   overflow: hidden;
-  background: #05080c;
+  background: var(--scanner-bg);
   border: 1px solid var(--line);
 }
 .scanner video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -353,7 +419,7 @@ a { color: var(--accent); }
   width: 84px; height: 84px; border-radius: 50%;
   display: grid; place-items: center; font-size: 15px; font-weight: 800;
   background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
-  box-shadow: 0 12px 30px rgba(198,242,78,.26);
+  box-shadow: 0 12px 30px rgba(var(--accent-rgb), .26);
 }
 .run-btn.stop { background: linear-gradient(140deg, #ff7a7a, #ff4d6d); color: #2a0a10; box-shadow: 0 12px 30px rgba(255,90,110,.24); }
 .run-btn.secondary { width: 64px; height: 64px; background: var(--surface-2); color: var(--text); box-shadow: none; border: 1px solid var(--line); font-size: 13px; }
@@ -361,14 +427,14 @@ a { color: var(--accent); }
 /* ---------- มินิเกม ---------- */
 .arena {
   position: relative; height: 320px; border-radius: var(--radius);
-  background: radial-gradient(circle at 50% 40%, #1b2836, #10161f);
+  background: radial-gradient(circle at 50% 40%, var(--arena-from), var(--arena-to));
   border: 1px solid var(--line); overflow: hidden; touch-action: manipulation;
 }
 .target {
   position: absolute; width: 62px; height: 62px; border-radius: 50%;
   display: grid; place-items: center; font-size: 27px;
   background: linear-gradient(140deg, var(--accent), var(--accent-2));
-  box-shadow: 0 6px 20px rgba(198,242,78,.35);
+  box-shadow: 0 6px 20px rgba(var(--accent-rgb), .35);
   animation: pop .18s ease;
 }
 .target.bomb { background: linear-gradient(140deg, #ff7a7a, #ff4d6d); box-shadow: 0 6px 20px rgba(255,90,110,.35); }
@@ -403,6 +469,33 @@ a { color: var(--accent); }
   transition: transform .12s;
 }
 .list-btn:active { transform: scale(.985); }
+
+/* ปุ่มเลือกสีหลักในหน้าตั้งค่าธีม */
+.swatch {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 800; color: rgba(0, 0, 0, .7);
+  border: 3px solid transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  transition: transform .12s ease, border-color .12s ease;
+}
+.swatch.on { border-color: var(--text); transform: scale(1.08); }
+.swatch:active { transform: scale(.94); }
+
+/* การ์ดสามช่องบนหน้าเพื่อน: คัดลอก / QR / กล้อง */
+.tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile-card {
+  display: grid; justify-items: center; gap: 4px;
+  padding: 14px 6px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--text); text-align: center;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.tile-card:active { transform: scale(.96); border-color: rgba(var(--accent-rgb), .5); }
+.tile-icon { font-size: 26px; line-height: 1; }
+.tile-label { font-size: 13px; font-weight: 700; margin-top: 2px; }
+.tile-caption { font-size: 10.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-caption.strong { color: var(--accent-text); }
 
 .seg { display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .seg button { flex: 1; padding: 9px 6px; border-radius: 11px; font-size: 13px; font-weight: 700; color: var(--muted); }

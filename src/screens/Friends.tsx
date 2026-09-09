@@ -86,19 +86,30 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
         }
       />
 
-      <div className="card tight row" style={{ gap: 10 }}>
-        <span>🔗</span>
-        <div className="grow">
-          <div className="tiny muted">รหัสเพื่อนของคุณ</div>
-          <div className="strong" style={{ letterSpacing: 1.5, fontSize: 17 }}>
-            {state.profile.code}
-          </div>
-        </div>
-        <button className="btn sm" onClick={() => setQrOpen(true)} aria-label="แสดงคิวอาร์โค้ดของฉัน">
-          ⬛ QR
+      {/* สามการ์ดสำหรับสามทางในการเพิ่มเพื่อน */}
+      <div className="tiles3">
+        <button className="tile-card" onClick={copyCode} aria-label={`คัดลอกรหัส ${state.profile.code}`}>
+          <span className="tile-icon">📋</span>
+          <span className="tile-label">คัดลอก</span>
+          <span className="tile-caption strong" style={{ letterSpacing: 1 }}>{state.profile.code}</span>
         </button>
-        <button className="btn sm" onClick={copyCode}>
-          คัดลอก
+        <button className="tile-card" onClick={() => setQrOpen(true)} aria-label="แสดงคิวอาร์โค้ดของฉัน">
+          <span className="tile-icon">⬛</span>
+          <span className="tile-label">QR ของฉัน</span>
+          <span className="tile-caption">ให้เพื่อนสแกน</span>
+        </button>
+        <button
+          className="tile-card"
+          onClick={() => {
+            setMsg(null)
+            setAddOpen(true)
+            setScanning(true)
+          }}
+          aria-label="เปิดกล้องสแกนคิวอาร์โค้ดของเพื่อน"
+        >
+          <span className="tile-icon">📷</span>
+          <span className="tile-label">กล้อง</span>
+          <span className="tile-caption">สแกนของเพื่อน</span>
         </button>
       </div>
 
@@ -164,7 +175,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
       {mine.length === 0 ? (
         <div className="card empty">
           <div className="big">👟</div>
-          ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> ให้เพื่อน
+          ยังไม่มีใครในก๊วน — ส่งรหัส <b style={{ color: 'var(--accent-text)' }}>{state.profile.code}</b> ให้เพื่อน
           หรือขอรหัสเขามากรอกก็ได้
           <div className="row" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
             <button className="btn primary sm" onClick={() => { setAddOpen(true); setScanning(true) }}>
@@ -250,7 +261,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
               ส่งคำขอเป็นเพื่อน
             </button>
             <div className="card tight muted small" style={{ marginTop: 14, lineHeight: 1.65 }}>
-              รหัสของคุณคือ <b style={{ color: 'var(--accent)' }}>{state.profile.code}</b> — กดปุ่ม QR ด้านบนให้เพื่อนสแกนก็ได้
+              รหัสของคุณคือ <b style={{ color: 'var(--accent-text)' }}>{state.profile.code}</b> — กดปุ่ม QR ด้านบนให้เพื่อนสแกนก็ได้
             </div>
           </>
         )}

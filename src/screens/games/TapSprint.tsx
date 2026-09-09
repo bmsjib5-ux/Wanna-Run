@@ -99,7 +99,7 @@ export default function TapSprint({ onFinish, best }: { onFinish: (score: number
                 ระวัง 💣 กดโดนแล้วเสียแต้มและคอมโบหลุด
               </div>
               <div className="muted small" style={{ marginTop: 8 }}>
-                สถิติสูงสุดของคุณ: <b style={{ color: 'var(--accent)' }}>{best}</b>
+                สถิติสูงสุดของคุณ: <b style={{ color: 'var(--accent-text)' }}>{best}</b>
               </div>
             </>
           )}
