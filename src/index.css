@@ -356,14 +356,21 @@ a { color: var(--accent-text); }
   background: var(--bg-soft);
   border-radius: 26px 26px 0 0;
   border-top: 1px solid var(--line);
-  max-height: 92dvh; overflow-y: auto;
+  max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+  will-change: transform;
   padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
   animation: rise .26s cubic-bezier(.22,.9,.3,1);
 }
 @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }
 .sheet-grip { width: 42px; height: 4px; border-radius: 99px; background: var(--line); margin: 6px auto 14px; }
+.sheet-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
 .sheet h2 { margin: 0 0 4px; font-size: 19px; }
-.sheet .sheet-sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.sheet .sheet-sub { color: var(--muted); font-size: 13px; }
+.sheet-close {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
+  font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
 
 /* ---------- toast ---------- */
 .toasts {
