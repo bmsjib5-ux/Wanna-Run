@@ -6,6 +6,7 @@ import Avatar from '../components/Avatar'
 import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
+import { isOnline, useNow } from '../lib/presence'
 import { boundsOf, distanceM } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import { PLACES } from '../lib/seed'
@@ -99,6 +100,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
 
   const me = geo.position
   const sharing = state.profile.sharingLocation
+  const now = useNow()
 
   // ส่งตำแหน่งของเราขึ้นเซิร์ฟเวอร์ระหว่างที่เปิดแชร์อยู่
   useEffect(() => {
@@ -318,7 +320,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={f.sharingLocation} />
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={isOnline(f.lastActiveAt, now)} />
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>

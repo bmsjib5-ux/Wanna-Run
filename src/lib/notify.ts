@@ -29,13 +29,20 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 export function pushNotice(title: string, body: string): void {
   listeners.forEach((fn) => fn({ title, body }))
   if (supportsSystemNotification() && Notification.permission === 'granted') {
-    try {
-      new Notification(title, { body, icon: '/icon-192.png', tag: title })
-    } catch {
-      /* บาง browser บนมือถือต้องใช้ผ่าน service worker เท่านั้น */
-    }
+    void systemNotify(title, { body, icon: '/icon-192.png', tag: title })
   }
   vibrate(30)
+}
+
+/** แสดงแจ้งเตือนของระบบ — มือถือ (Android Chrome) แสดงได้ผ่าน service worker เท่านั้น */
+async function systemNotify(title: string, options: NotificationOptions): Promise<void> {
+  try {
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
+    if (reg) await reg.showNotification(title, options)
+    else new Notification(title, options)
+  } catch {
+    /* toast ในแอปแสดงไปแล้ว */
+  }
 }
 
 export function vibrate(pattern: number | number[]): void {

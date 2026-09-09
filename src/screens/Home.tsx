@@ -5,6 +5,7 @@ import InviteCard from '../components/InviteCard'
 import Avatar from '../components/Avatar'
 import { levelOf, missionsWithProgress, useStore } from '../state/store'
 import { startOfWeek } from '../lib/format'
+import { isOnline, useNow } from '../lib/presence'
 
 export default function Home({ nav }: { nav: Nav }) {
   const { state, cloud } = useStore()
@@ -33,7 +34,9 @@ export default function Home({ nav }: { nav: Nav }) {
   )
   const doneToday = missions.filter((m) => m.progress >= m.target).length
 
-  const online = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
+  const now = useNow()
+  const online = friends.filter((f) => f.status === 'friend' && isOnline(f.lastActiveAt, now))
+  const sharing = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
   const pending = friends.filter((f) => f.status === 'incoming').length
 
   const goalPct = Math.min(100, (weekKm / Math.max(1, profile.weeklyGoalKm)) * 100)
@@ -155,7 +158,9 @@ export default function Home({ nav }: { nav: Nav }) {
               แผนที่เพื่อน
             </span>
             <span className="muted small">
-              {online.length > 0 ? `${online.length} คนกำลังแชร์ตำแหน่ง` : 'ยังไม่มีใครแชร์ตำแหน่งตอนนี้'}
+              {online.length > 0
+                ? `${online.length} คนออนไลน์${sharing.length > 0 ? ` · ${sharing.length} คนแชร์ตำแหน่ง` : ''}`
+                : 'ยังไม่มีเพื่อนออนไลน์ตอนนี้'}
             </span>
           </span>
           <span className="muted">›</span>

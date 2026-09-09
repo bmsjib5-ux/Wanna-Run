@@ -29,6 +29,7 @@ import { pushNotice } from '../lib/notify'
 import { blobToDataUrl, squareThumbnail } from '../lib/image'
 import { describeAuthError, isCloudConfigured } from '../lib/supabase'
 import * as api from '../lib/api'
+import { HEARTBEAT_MS } from '../lib/presence'
 
 const STORAGE_PREFIX = 'wanna-run.state.v1'
 export const XP_PER_LEVEL = 250
@@ -212,7 +213,40 @@ export function StoreProvider({
     setSyncing(true)
     setState(load(userId))
     void refresh()
-    const unsubscribe = api.subscribeToChanges(() => void refresh())
+    const unsubscribe = api.subscribeToChanges((table, row) => {
+      // heartbeat ของเพื่อนมาทุกนาทีต่อคน ถ้าดึงข้อมูลใหม่ทุกครั้งจะเปลืองมาก
+      // แค่แปะเวลาที่เห็นล่าสุดลงไปพอ ส่วนของตัวเองไม่ต้องทำอะไร
+      if (table === 'profiles' && row) {
+        if (row.id === userId) return
+        let patched = false
+        setState((s) => {
+          const friend = s.friends.find((f) => f.id === row.id)
+          if (!friend) return s
+          const seenAt = api.heartbeatOnly(row, friend)
+          if (seenAt === null) return s
+          patched = true
+          if (seenAt === friend.lastActiveAt) return s
+          return { ...s, friends: s.friends.map((f) => (f.id === row.id ? { ...f, lastActiveAt: seenAt } : f)) }
+        })
+        if (patched) return
+      }
+      void refresh()
+    })
+
+    // heartbeat บอกเพื่อนว่ายังออนไลน์ ส่งตอนเปิดอยู่ และยิงครั้งสุดท้ายตอนถูกย่อ
+    // (เบราว์เซอร์มือถือหยุด JS ของแท็บเบื้องหลัง จึงสัญญาว่าออนไลน์ต่อไม่ได้)
+    const beat = (keepalive = false) => api.touchPresence(keepalive).catch(() => undefined)
+    void beat()
+    const heart = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void beat()
+    }, HEARTBEAT_MS)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void beat(true)
+      else void beat()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    const onLeave = () => void beat(true)
+    window.addEventListener('pagehide', onLeave)
 
     // Realtime ผ่าน websocket อาจต่อไม่ได้ (เน็ตองค์กร พร็อกซี มือถือสลับสัญญาณ)
     // จึงถามซ้ำเป็นระยะและตอนกลับมาโฟกัสหน้าจอ เพื่อไม่ให้ข้อมูลค้างเมื่อ websocket หลุด
@@ -226,6 +260,9 @@ export function StoreProvider({
     return () => {
       unsubscribe()
       window.clearInterval(timer)
+      window.clearInterval(heart)
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', onLeave)
       document.removeEventListener('visibilitychange', onWake)
       window.removeEventListener('focus', onWake)
     }
