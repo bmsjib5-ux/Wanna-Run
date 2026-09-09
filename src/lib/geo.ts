@@ -89,3 +89,18 @@ export function directionsUrl(to: LatLng): string {
   const params = new URLSearchParams({ api: '1', destination: dest, travelmode: 'walking' })
   return `https://www.google.com/maps/dir/?${params.toString()}`
 }
+
+/**
+ * ลดจำนวนจุดของเส้นทางก่อนเก็บขึ้นเซิร์ฟเวอร์
+ * วิ่ง 10 กม. เก็บทุกวินาทีจะได้ราว 3,000 จุด ทั้งที่วาดบนแผนที่มือถือ
+ * แทบไม่ต่างจากเก็บทุก 10 เมตร — เก็บจุดแรกและจุดสุดท้ายไว้เสมอ
+ */
+export function simplifyPath(path: TrackPoint[], minGapM = 10): TrackPoint[] {
+  if (path.length <= 2) return path
+  const out: TrackPoint[] = [path[0]]
+  for (let i = 1; i < path.length - 1; i++) {
+    if (distanceM(out[out.length - 1], path[i]) >= minGapM) out.push(path[i])
+  }
+  out.push(path[path.length - 1])
+  return out
+}

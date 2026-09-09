@@ -35,6 +35,12 @@ export default function AboutBuild() {
         )}
         <br />
         ใช้งานผ่าน: {platform}
+        {isCloudConfigured && (
+          <>
+            <br />
+            ประวัติการวิ่ง เกม และภารกิจ: เก็บบนคลาวด์
+          </>
+        )}
         {built && (
           <>
             <br />

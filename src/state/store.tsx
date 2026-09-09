@@ -159,6 +159,10 @@ export function StoreProvider({
   stateRef.current = state
   const cloudRef = useRef(cloud)
   cloudRef.current = cloud
+  // อัปประวัติเก่าในเครื่องขึ้นคลาวด์ครั้งเดียวต่อการล็อกอิน
+  const migratedRef = useRef(false)
+  // รับความคืบหน้าจากเซิร์ฟเวอร์แค่ครั้งแรก หลังจากนั้นในเครื่องเป็นตัวตั้ง
+  const progressLoadedRef = useRef(false)
 
   useEffect(() => {
     save(state, userId)
@@ -182,12 +186,15 @@ export function StoreProvider({
     if (!cloudRef.current) return
     const local = stateRef.current.profile
     // ใช้ allSettled เพื่อให้ส่วนที่ดึงสำเร็จยังแสดงได้ แม้บางส่วนจะพลาด
-    const [profileR, friendsR, groupsR, invitesR, spotsR] = await Promise.allSettled([
+    const [profileR, friendsR, groupsR, invitesR, spotsR, runsR, progressR, scoresR] = await Promise.allSettled([
       api.fetchMyProfile({ level: local.level, xp: local.xp, coins: local.coins }),
       api.fetchFriends(),
       api.fetchGroups(),
       api.fetchInvites(),
       api.fetchSpots(),
+      api.fetchRuns(),
+      api.fetchProgress(),
+      api.fetchGameScores(),
     ])
 
     for (const [what, result] of [
@@ -196,19 +203,61 @@ export function StoreProvider({
       ['กลุ่ม', groupsR],
       ['นัดวิ่ง', invitesR],
       ['จุดวิ่งประจำ', spotsR],
+      ['ประวัติการวิ่ง', runsR],
+      ['ความคืบหน้า', progressR],
+      ['คะแนนเกม', scoresR],
     ] as const) {
       if (result.status === 'rejected') console.error(`ดึงข้อมูล${what}ไม่สำเร็จ`, result.reason)
     }
 
-    setState((s) => ({
-      ...s,
-      onboarded: profileR.status === 'fulfilled' ? !!profileR.value : s.onboarded,
-      profile: profileR.status === 'fulfilled' && profileR.value ? profileR.value : s.profile,
-      friends: friendsR.status === 'fulfilled' ? friendsR.value : s.friends,
-      groups: groupsR.status === 'fulfilled' ? groupsR.value : s.groups,
-      invites: invitesR.status === 'fulfilled' ? invitesR.value : s.invites,
-      spots: spotsR.status === 'fulfilled' ? spotsR.value : s.spots,
-    }))
+    // ประวัติที่เคยเก็บไว้ในเครื่องก่อนมีตารางบนคลาวด์ ให้อัปขึ้นครั้งแรกที่ซิงก์สำเร็จ
+    let serverRuns = runsR.status === 'fulfilled' ? runsR.value : null
+    if (serverRuns && !migratedRef.current) {
+      migratedRef.current = true
+      const known = new Set(serverRuns.map((r) => r.startedAt))
+      const onlyLocal = stateRef.current.runs.filter((r) => !known.has(r.startedAt))
+      if (onlyLocal.length > 0) {
+        try {
+          const uploaded = await api.uploadLocalRuns(onlyLocal)
+          serverRuns = [...uploaded, ...serverRuns].sort((a, b) => b.startedAt - a.startedAt)
+          pushNotice('ย้ายประวัติขึ้นคลาวด์แล้ว', `${uploaded.length} กิจกรรมที่เคยอยู่ในเครื่องนี้`)
+        } catch (err) {
+          console.error('อัปประวัติเก่าไม่สำเร็จ', err)
+        }
+      }
+    }
+
+    setState((s) => {
+      // ความคืบหน้าเอาค่าจากเซิร์ฟเวอร์เฉพาะครั้งแรก หลังจากนั้นในเครื่องเป็นตัวตั้ง
+      // แล้วค่อยส่งขึ้นไปทับ (ไม่งั้นสแนปช็อตเก่าจะย้อน XP ที่เพิ่งได้)
+      const progress = progressR.status === 'fulfilled' ? progressR.value : null
+      const takeProgress = progress && !progressLoadedRef.current
+      if (progress) progressLoadedRef.current = true
+      const scores = scoresR.status === 'fulfilled' ? scoresR.value : null
+
+      const profile = profileR.status === 'fulfilled' && profileR.value ? profileR.value : s.profile
+      return {
+        ...s,
+        onboarded: profileR.status === 'fulfilled' ? !!profileR.value : s.onboarded,
+        profile: takeProgress
+          ? { ...profile, xp: progress.xp, coins: progress.coins, level: levelOf(progress.xp).level }
+          : profile,
+        counters: takeProgress ? progress.counters : s.counters,
+        missions: takeProgress
+          ? s.missions.map((m) => ({ ...m, claimed: progress.claimed.includes(m.id) }))
+          : s.missions,
+        lastSpinAt: takeProgress ? progress.lastSpinAt : s.lastSpinAt,
+        // คะแนนเกมเอาค่าที่สูงกว่าเสมอ กันกรณีเล่นบนอีกเครื่องแล้วยังไม่ได้ซิงก์
+        highScores: scores
+          ? { ...s.highScores, ...Object.fromEntries(Object.entries(scores).map(([g, v]) => [g, Math.max(v ?? 0, s.highScores[g as GameKey] ?? 0)])) }
+          : s.highScores,
+        friends: friendsR.status === 'fulfilled' ? friendsR.value : s.friends,
+        groups: groupsR.status === 'fulfilled' ? groupsR.value : s.groups,
+        invites: invitesR.status === 'fulfilled' ? invitesR.value : s.invites,
+        spots: spotsR.status === 'fulfilled' ? spotsR.value : s.spots,
+        runs: serverRuns ?? s.runs,
+      }
+    })
     setSyncing(false)
   }, [])
 
@@ -275,6 +324,25 @@ export function StoreProvider({
       window.removeEventListener('focus', onWake)
     }
   }, [cloud, userId, refresh])
+
+  // ส่ง XP เหรียญ ตัวนับ และภารกิจที่รับรางวัลแล้วขึ้นคลาวด์
+  // หน่วงไว้ 3 วินาทีเพราะค่าพวกนี้เปลี่ยนถี่ (เล่นเกมทีละหลายครั้ง)
+  const claimedKey = state.missions.filter((m) => m.claimed).map((m) => m.id).join(',')
+  useEffect(() => {
+    if (!cloud || !progressLoadedRef.current) return
+    const timer = window.setTimeout(() => {
+      void api
+        .saveProgress({
+          xp: state.profile.xp,
+          coins: state.profile.coins,
+          counters: state.counters,
+          claimed: claimedKey ? claimedKey.split(',') : [],
+          lastSpinAt: state.lastSpinAt,
+        })
+        .catch((err: Error) => console.error('เก็บความคืบหน้าไม่สำเร็จ', err))
+    }, 3000)
+    return () => window.clearTimeout(timer)
+  }, [cloud, state.profile.xp, state.profile.coins, state.counters, claimedKey, state.lastSpinAt])
 
   // ตรวจข้ามวัน/ข้ามสัปดาห์เพื่อรีเซ็ตภารกิจ
   useEffect(() => {
@@ -579,6 +647,10 @@ export function StoreProvider({
             const totalMs = next.runs.reduce((sum, r) => sum + r.movingMs, 0)
             const pace = totalKm > 0 ? Math.round(totalMs / 1000 / totalKm) : null
             void api.updateMyStats(totalKm, pace).catch(console.error)
+            void api.saveRunRemote(run).catch((err: Error) => {
+              console.error(err)
+              pushNotice('เก็บกิจกรรมขึ้นคลาวด์ไม่สำเร็จ', 'ยังอยู่ในเครื่องนี้ เดี๋ยวลองใหม่ตอนเชื่อมต่อได้')
+            })
           }
           return next
         })
@@ -590,7 +662,10 @@ export function StoreProvider({
         })
       },
 
-      deleteRun: (runId) => patch((s) => ({ ...s, runs: s.runs.filter((r) => r.id !== runId) })),
+      deleteRun: (runId) => {
+        patch((s) => ({ ...s, runs: s.runs.filter((r) => r.id !== runId) }))
+        if (cloudRef.current) void api.deleteRunRemote(runId).catch(console.error)
+      },
 
       toggleShareLocation: (on) => {
         patch((s) => {
@@ -644,9 +719,13 @@ export function StoreProvider({
         patch((s) => {
           let next = bumpMetric(s, 'gamePlayed', 1)
           next = bumpMetric(next, 'gameScore', score)
+          const best = Math.max(next.highScores[game] ?? 0, score)
+          if (cloudRef.current && best > (s.highScores[game] ?? 0)) {
+            void api.saveGameScore(game, best).catch(console.error)
+          }
           return {
             ...next,
-            highScores: { ...next.highScores, [game]: Math.max(next.highScores[game] ?? 0, score) },
+            highScores: { ...next.highScores, [game]: best },
             profile: { ...next.profile, coins: next.profile.coins + coins, xp: next.profile.xp + xp },
           }
         }),

@@ -1,5 +1,7 @@
 import type {
+  Counters,
   Friend,
+  GameKey,
   Group,
   ID,
   InviteReply,
@@ -7,9 +9,12 @@ import type {
   Place,
   Profile,
   RunInvite,
+  RunSession,
+  TrackPoint,
 } from '../types'
 import { requireSupabase } from './supabase'
 import { squareThumbnail } from './image'
+import { simplifyPath } from './geo'
 import { setServerTime } from './presence'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
@@ -577,6 +582,147 @@ export async function deleteSpotRemote(spotId: ID): Promise<void> {
   const { error } = await requireSupabase().from('spots').delete().eq('id', spotId)
   if (error) throw error
 }
+
+// ---------- ประวัติการวิ่ง / ความคืบหน้า / คะแนนเกม ----------
+
+type RunRow = {
+  id: string
+  started_at: string
+  ended_at: string
+  distance_m: number
+  moving_ms: number
+  path: TrackPoint[] | null
+  invite_id: string | null
+  place_name: string | null
+  simulated: boolean
+}
+
+function toRun(r: RunRow): RunSession {
+  return {
+    id: r.id,
+    startedAt: new Date(r.started_at).getTime(),
+    endedAt: new Date(r.ended_at).getTime(),
+    distanceM: Number(r.distance_m),
+    movingMs: Number(r.moving_ms),
+    path: Array.isArray(r.path) ? r.path : [],
+    inviteId: r.invite_id ?? undefined,
+    placeName: r.place_name ?? undefined,
+    simulated: r.simulated,
+  }
+}
+
+export async function fetchRuns(): Promise<RunSession[]> {
+  const { data, error } = await requireSupabase()
+    .from('runs')
+    .select('id,started_at,ended_at,distance_m,moving_ms,path,invite_id,place_name,simulated')
+    .order('started_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  return ((data ?? []) as RunRow[]).map(toRun)
+}
+
+/** id ของกิจกรรมที่สร้างในเครื่อง (rn_xxx) ใช้เป็น uuid ไม่ได้ จึงแปลงให้ตอนอัปขึ้น */
+function runRow(run: RunSession, owner: string) {
+  return {
+    id: /^[0-9a-f-]{36}$/i.test(run.id) ? run.id : newId(),
+    owner,
+    started_at: new Date(run.startedAt).toISOString(),
+    ended_at: new Date(run.endedAt).toISOString(),
+    distance_m: run.distanceM,
+    moving_ms: Math.round(run.movingMs),
+    // ลดจุดก่อนเก็บ ประหยัดพื้นที่แต่เส้นทางบนแผนที่ยังเหมือนเดิม
+    path: simplifyPath(run.path),
+    invite_id: run.inviteId ?? null,
+    place_name: run.placeName ?? null,
+    simulated: run.simulated,
+  }
+}
+
+export async function saveRunRemote(run: RunSession): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+  const { error } = await requireSupabase().from('runs').insert(runRow(run, uid))
+  if (error) throw error
+}
+
+export async function deleteRunRemote(runId: ID): Promise<void> {
+  const { error } = await requireSupabase().from('runs').delete().eq('id', runId)
+  if (error) throw error
+}
+
+/** อัปประวัติที่เคยเก็บไว้ในเครื่องขึ้นเซิร์ฟเวอร์ครั้งแรกที่ล็อกอิน คืนรายการที่อัปแล้ว */
+export async function uploadLocalRuns(runs: RunSession[]): Promise<RunSession[]> {
+  const uid = await currentUserId()
+  if (!uid || runs.length === 0) return []
+  const rows = runs.map((r) => runRow(r, uid))
+  const { error } = await requireSupabase().from('runs').insert(rows)
+  if (error) throw error
+  return rows.map((row, i) => ({ ...runs[i], id: row.id }))
+}
+
+export type Progress = {
+  xp: number
+  coins: number
+  counters: Counters
+  claimed: string[]
+  lastSpinAt: number
+}
+
+export async function fetchProgress(): Promise<Progress | null> {
+  const uid = await currentUserId()
+  if (!uid) return null
+  const { data, error } = await requireSupabase()
+    .from('progress')
+    .select('xp,coins,counters,claimed,last_spin_at')
+    .eq('owner', uid)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const row = data as { xp: number; coins: number; counters: Counters; claimed: string[]; last_spin_at: string | null }
+  return {
+    xp: row.xp,
+    coins: row.coins,
+    counters: row.counters,
+    claimed: Array.isArray(row.claimed) ? row.claimed : [],
+    lastSpinAt: row.last_spin_at ? new Date(row.last_spin_at).getTime() : 0,
+  }
+}
+
+export async function saveProgress(p: Progress): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase().from('progress').upsert(
+    {
+      owner: uid,
+      xp: p.xp,
+      coins: p.coins,
+      counters: p.counters,
+      claimed: p.claimed,
+      last_spin_at: p.lastSpinAt ? new Date(p.lastSpinAt).toISOString() : null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'owner' },
+  )
+  if (error) throw error
+}
+
+export async function fetchGameScores(): Promise<Partial<Record<GameKey, number>>> {
+  const { data, error } = await requireSupabase().from('game_scores').select('game,best_score')
+  if (error) throw error
+  const out: Partial<Record<GameKey, number>> = {}
+  for (const row of (data ?? []) as Array<{ game: GameKey; best_score: number }>) out[row.game] = row.best_score
+  return out
+}
+
+export async function saveGameScore(game: GameKey, best: number): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('game_scores')
+    .upsert({ owner: uid, game, best_score: best, updated_at: new Date().toISOString() }, { onConflict: 'owner,game' })
+  if (error) throw error
+}
+
 
 // ---------- รูปโปรไฟล์ ----------
 
