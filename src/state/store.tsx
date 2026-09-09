@@ -26,6 +26,7 @@ import { initialState } from '../lib/seed'
 import { bump, emptyCounters, rollover } from '../lib/counters'
 import { normalizeCode, uid } from '../lib/id'
 import { pushNotice } from '../lib/notify'
+import { blobToDataUrl, squareThumbnail } from '../lib/image'
 import { isCloudConfigured } from '../lib/supabase'
 import * as api from '../lib/api'
 
@@ -84,7 +85,9 @@ export function missionsWithProgress(state: AppState): Mission[] {
 }
 
 type Actions = {
-  completeOnboarding: (name: string, emoji: string, weeklyGoalKm: number) => void
+  completeOnboarding: (name: string, emoji: string, weeklyGoalKm: number, photo?: File) => void
+  setAvatar: (file: File) => Promise<void>
+  clearAvatar: () => Promise<void>
   updateProfile: (patch: Partial<AppState['profile']>) => void
   resetAll: () => void
 
@@ -262,7 +265,7 @@ export function StoreProvider({
     }
 
     return {
-      completeOnboarding: (name, emoji, weeklyGoalKm) => {
+      completeOnboarding: (name, emoji, weeklyGoalKm, photo) => {
         const clean = name.trim() || 'นักวิ่งนิรนาม'
         if (cloudRef.current) {
           const local = stateRef.current.profile
@@ -273,6 +276,11 @@ export function StoreProvider({
               coins: local.coins,
             })
             setState((s) => ({ ...s, onboarded: true, profile }))
+            // อัปรูปหลังมีแถวโปรไฟล์แล้วเท่านั้น ไม่งั้นอัปเดตที่อยู่รูปไม่ได้
+            if (photo) {
+              const url = await api.uploadAvatar(photo)
+              setState((s) => ({ ...s, profile: { ...s.profile, avatarUrl: url } }))
+            }
           })
           return
         }
@@ -281,6 +289,23 @@ export function StoreProvider({
           onboarded: true,
           profile: { ...s.profile, name: clean, emoji, weeklyGoalKm },
         }))
+        if (photo) void actionsRef.current.setAvatar(photo)
+      },
+
+      setAvatar: async (file) => {
+        if (cloudRef.current) {
+          const url = await api.uploadAvatar(file)
+          patch((s) => ({ ...s, profile: { ...s.profile, avatarUrl: url } }))
+          return
+        }
+        // โหมดในเครื่อง: เก็บรูปย่อเป็น data URL ลง localStorage
+        const dataUrl = await blobToDataUrl(await squareThumbnail(file))
+        patch((s) => ({ ...s, profile: { ...s.profile, avatarUrl: dataUrl } }))
+      },
+
+      clearAvatar: async () => {
+        if (cloudRef.current) await api.removeAvatar()
+        patch((s) => ({ ...s, profile: { ...s.profile, avatarUrl: undefined } }))
       },
 
       updateProfile: (p) => {

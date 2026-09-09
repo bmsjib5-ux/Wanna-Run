@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
+import Avatar from '../components/Avatar'
 import { useStore } from '../state/store'
 import { shortDate } from '../lib/format'
 import type { Group, ID } from '../types'
@@ -57,8 +58,8 @@ export default function Groups({ nav, focusId }: { nav: Nav; focusId?: string })
                 </span>
                 <span className="row" style={{ gap: 0 }}>
                   {members.slice(0, 3).map((m, i) => (
-                    <span key={m.id} className="avatar sm" style={{ marginLeft: i === 0 ? 0 : -8 }}>
-                      {m.emoji}
+                    <span key={m.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+                      <Avatar emoji={m.emoji} photo={m.avatarUrl} name={m.name} size="sm" />
                     </span>
                   ))}
                 </span>
@@ -91,7 +92,7 @@ export default function Groups({ nav, focusId }: { nav: Nav; focusId?: string })
             </div>
             <div className="stack-8">
               <div className="card tight row">
-                <span className="avatar">{state.profile.emoji}</span>
+                <Avatar emoji={state.profile.emoji} photo={state.profile.avatarUrl} name={state.profile.name} />
                 <span className="grow strong" style={{ fontSize: 14.5 }}>
                   {state.profile.name}
                 </span>
@@ -101,7 +102,7 @@ export default function Groups({ nav, focusId }: { nav: Nav; focusId?: string })
                 .filter((f) => detail.memberIds.includes(f.id))
                 .map((f) => (
                   <div key={f.id} className="card tight row">
-                    <span className="avatar">{f.emoji}</span>
+                    <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} />
                     <span className="grow">
                       <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
                         {f.name}

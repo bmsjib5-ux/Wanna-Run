@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../state/store'
 import { requestNotificationPermission } from '../lib/notify'
+import AvatarPicker from '../components/AvatarPicker'
+import { blobToDataUrl, squareThumbnail } from '../lib/image'
 
 const AVATARS = ['🏃', '🦊', '🐼', '🐯', '🦄', '🐧', '🐨', '🐸', '🦁', '🐰', '🐻', '🐙']
 const GOALS = [10, 20, 30, 50]
@@ -11,10 +13,12 @@ export default function Onboarding() {
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🏃')
   const [goal, setGoal] = useState(20)
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | undefined>()
 
   const finish = async () => {
     await requestNotificationPermission()
-    actions.completeOnboarding(name, emoji, goal)
+    actions.completeOnboarding(name, emoji, goal, photo ?? undefined)
   }
 
   return (
@@ -66,7 +70,24 @@ export default function Onboarding() {
             </label>
 
             <div className="field">
-              <span>เลือกอวตาร</span>
+              <span>รูปโปรไฟล์ (ไม่บังคับ)</span>
+              <AvatarPicker
+                emoji={emoji}
+                photo={preview}
+                name={name}
+                onPick={async (file) => {
+                  setPhoto(file)
+                  setPreview(await blobToDataUrl(await squareThumbnail(file)))
+                }}
+                onClear={async () => {
+                  setPhoto(null)
+                  setPreview(undefined)
+                }}
+              />
+            </div>
+
+            <div className="field">
+              <span>หรือเลือกอิโมจิ</span>
               <div className="row wrap" style={{ gap: 8 }}>
                 {AVATARS.map((a) => (
                   <button

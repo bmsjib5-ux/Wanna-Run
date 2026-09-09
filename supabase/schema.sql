@@ -16,6 +16,7 @@ create table if not exists public.profiles (
   weekly_goal_km    int  not null default 20,
   total_km          numeric not null default 0,
   avg_pace_sec      int,
+  avatar_url        text,
   sharing_location  boolean not null default false,
   last_active_at    timestamptz not null default now(),
   created_at        timestamptz not null default now()

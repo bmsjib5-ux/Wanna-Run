@@ -9,6 +9,7 @@ import type {
   RunInvite,
 } from '../types'
 import { requireSupabase } from './supabase'
+import { squareThumbnail } from './image'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
 function newId(): string {
@@ -25,6 +26,7 @@ type ProfileRow = {
   id: string
   name: string
   emoji: string
+  avatar_url?: string | null
   code: string
   bio: string
   weekly_goal_km: number
@@ -35,8 +37,9 @@ type ProfileRow = {
   created_at: string
 }
 
-const PROFILE_COLS =
-  'id,name,emoji,code,bio,weekly_goal_km,total_km,avg_pace_sec,sharing_location,last_active_at,created_at'
+// ใช้ * แทนการไล่ชื่อคอลัมน์ เพื่อให้แอปยังทำงานได้แม้ฐานข้อมูลยังไม่มีคอลัมน์ใหม่
+// (เช่น avatar_url ก่อนรัน supabase/avatars.sql) แทนที่จะพังทั้งหน้าเพราะ 42703
+const PROFILE_COLS = '*'
 
 const BANGKOK: LatLng = { lat: 13.7305, lng: 100.5418 }
 
@@ -45,6 +48,7 @@ function toProfile(row: ProfileRow, local: Pick<Profile, 'level' | 'xp' | 'coins
     id: row.id,
     name: row.name,
     emoji: row.emoji,
+    avatarUrl: row.avatar_url ?? undefined,
     code: row.code,
     weeklyGoalKm: row.weekly_goal_km,
     sharingLocation: row.sharing_location,
@@ -58,6 +62,7 @@ function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Frie
     id: row.id,
     name: row.name,
     emoji: row.emoji,
+    avatarUrl: row.avatar_url ?? undefined,
     code: row.code,
     status,
     bio: row.bio ?? '',
@@ -113,6 +118,7 @@ export async function updateMyProfile(patch: Partial<Profile>): Promise<void> {
   const row: Record<string, unknown> = { last_active_at: new Date().toISOString() }
   if (patch.name !== undefined) row.name = patch.name
   if (patch.emoji !== undefined) row.emoji = patch.emoji
+  if (patch.avatarUrl !== undefined) row.avatar_url = patch.avatarUrl ?? null
   if (patch.weeklyGoalKm !== undefined) row.weekly_goal_km = patch.weeklyGoalKm
   if (patch.sharingLocation !== undefined) row.sharing_location = patch.sharingLocation
   const { error } = await requireSupabase().from('profiles').update(row).eq('id', uid)
@@ -445,4 +451,38 @@ export function subscribeToChanges(onChange: (table: string) => void): () => voi
   return () => {
     sb.removeChannel(channel)
   }
+}
+
+// ---------- รูปโปรไฟล์ ----------
+
+const AVATAR_BUCKET = 'avatars'
+
+/** ย่อรูปแล้วอัปขึ้น Storage คืน URL สาธารณะพร้อมพารามิเตอร์กันแคชค้าง */
+export async function uploadAvatar(file: File): Promise<string> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+
+  const thumb = await squareThumbnail(file)
+  const path = `${uid}/avatar.jpg`
+  const { error } = await sb.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, thumb, { contentType: 'image/jpeg', upsert: true, cacheControl: '3600' })
+  if (error) throw error
+
+  const { data } = sb.storage.from(AVATAR_BUCKET).getPublicUrl(path)
+  // ที่อยู่ไฟล์เหมือนเดิมทุกครั้ง จึงต้องต่อเวอร์ชันไว้ให้เบราว์เซอร์โหลดรูปใหม่
+  const url = `${data.publicUrl}?v=${Date.now()}`
+  await updateMyProfile({ avatarUrl: url })
+  return url
+}
+
+export async function removeAvatar(): Promise<void> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) return
+  await sb.storage.from(AVATAR_BUCKET).remove([`${uid}/avatar.jpg`])
+  // ล้างค่าตรง ๆ เพราะ updateMyProfile ข้ามฟิลด์ที่เป็น undefined
+  const { error } = await sb.from('profiles').update({ avatar_url: null }).eq('id', uid)
+  if (error) throw error
 }

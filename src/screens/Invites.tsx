@@ -5,6 +5,7 @@ import Sheet from '../components/Sheet'
 import InviteCard from '../components/InviteCard'
 import PlacePicker from '../components/PlacePicker'
 import Map from '../components/Map'
+import Avatar from '../components/Avatar'
 import { useStore } from '../state/store'
 import { fromLocalInput, toLocalInput, whenLabel } from '../lib/format'
 import { PLACES } from '../lib/seed'
@@ -89,7 +90,7 @@ export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean 
             <div className="section-title">ใครไปบ้าง</div>
             <div className="stack-8">
               <div className="card tight row">
-                <span className="avatar">{state.profile.emoji}</span>
+                <Avatar emoji={state.profile.emoji} photo={state.profile.avatarUrl} name={state.profile.name} />
                 <span className="grow strong" style={{ fontSize: 14.5 }}>
                   {state.profile.name}
                 </span>
@@ -103,7 +104,7 @@ export default function Invites({ nav, openNew }: { nav: Nav; openNew?: boolean 
                   const r = live.replies[f.id]
                   return (
                     <div key={f.id} className="card tight row">
-                      <span className="avatar">{f.emoji}</span>
+                      <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} />
                       <span className="grow strong" style={{ fontSize: 14.5 }}>
                         {f.name}
                         {f.id === live.hostId && <span className="muted small"> · เจ้าภาพ</span>}

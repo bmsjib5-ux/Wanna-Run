@@ -1,5 +1,6 @@
 import type { Friend, RunInvite } from '../types'
 import { whenLabel } from '../lib/format'
+import Avatar from './Avatar'
 
 type Props = {
   invite: RunInvite
@@ -50,8 +51,8 @@ export default function InviteCard({ invite, friends, compact, onOpen, children 
       <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
         <div className="row" style={{ gap: -6 }}>
           {attendees.slice(0, 4).map((f, i) => (
-            <span key={f.id} className="avatar sm" style={{ marginLeft: i === 0 ? 0 : -8 }}>
-              {f.emoji}
+            <span key={f.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} size="sm" />
             </span>
           ))}
         </div>

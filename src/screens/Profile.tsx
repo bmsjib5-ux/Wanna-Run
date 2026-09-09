@@ -3,6 +3,8 @@ import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import Map from '../components/Map'
+import Avatar from '../components/Avatar'
+import AvatarPicker from '../components/AvatarPicker'
 import { levelOf, useStore } from '../state/store'
 import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
@@ -49,8 +51,8 @@ export default function Profile({ nav }: { nav: Nav }) {
       />
 
       <div className="card center">
-        <div className="avatar lg" style={{ margin: '0 auto' }}>
-          {profile.emoji}
+        <div style={{ display: 'grid', placeItems: 'center' }}>
+          <Avatar emoji={profile.emoji} photo={profile.avatarUrl} name={profile.name} size="lg" />
         </div>
         <div className="strong" style={{ fontSize: 20, marginTop: 12 }}>
           {profile.name}
@@ -171,12 +173,23 @@ export default function Profile({ nav }: { nav: Nav }) {
       </div>
 
       <Sheet open={editing} title="แก้ไขโปรไฟล์" onClose={() => setEditing(false)}>
+        <div className="field">
+          <span>รูปโปรไฟล์</span>
+          <AvatarPicker
+            emoji={profile.emoji}
+            photo={profile.avatarUrl}
+            name={profile.name}
+            onPick={actions.setAvatar}
+            onClear={actions.clearAvatar}
+          />
+        </div>
+
         <label className="field">
           <span>ชื่อ</span>
           <input value={profile.name} onChange={(e) => actions.updateProfile({ name: e.target.value })} maxLength={24} />
         </label>
         <div className="field">
-          <span>อวตาร</span>
+          <span>อิโมจิ {profile.avatarUrl && <span className="muted">(ใช้เมื่อไม่มีรูป)</span>}</span>
           <div className="row wrap" style={{ gap: 8 }}>
             {AVATARS.map((a) => (
               <button

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
-import StatusDot from '../components/StatusDot'
+import Avatar from '../components/Avatar'
 import QrCode from '../components/QrCode'
 import QrScanner from '../components/QrScanner'
 import { friendLink } from '../lib/friendLink'
@@ -116,7 +116,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
           <div className="stack-8">
             {incoming.map((f) => (
               <div key={f.id} className="card tight row">
-                <span className="avatar">{f.emoji}</span>
+                <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} />
                 <div className="grow">
                   <div className="strong" style={{ fontSize: 14.5 }}>
                     {f.name}
@@ -141,7 +141,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
           <div className="stack-8">
             {outgoing.map((f) => (
               <div key={f.id} className="card tight row">
-                <span className="avatar">{f.emoji}</span>
+                <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} />
                 <div className="grow">
                   <div className="strong" style={{ fontSize: 14.5 }}>
                     {f.name}
@@ -189,7 +189,7 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
           <div className="stack-8">
             {suggested.map((f) => (
               <div key={f.id} className="card tight row">
-                <span className="avatar">{f.emoji}</span>
+                <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} />
                 <div className="grow">
                   <div className="strong" style={{ fontSize: 14.5 }}>
                     {f.name}
@@ -292,10 +292,7 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
   return (
     <>
       <button className="list-btn" onClick={() => setOpen(true)}>
-        <span className="avatar-wrap">
-          <span className="avatar">{friend.emoji}</span>
-          <StatusDot online={friend.sharingLocation} />
-        </span>
+        <Avatar emoji={friend.emoji} photo={friend.avatarUrl} name={friend.name} online={friend.sharingLocation} />
         <span className="grow">
           <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
             {friend.name}

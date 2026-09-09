@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
-import StatusDot from '../components/StatusDot'
+import Avatar from '../components/Avatar'
 import Map, { type MapPin } from '../components/Map'
 import { useStore } from '../state/store'
 import { useCurrentPosition, useFriendPings } from '../lib/useGeo'
@@ -44,10 +44,10 @@ export default function LiveMap({ nav }: { nav: Nav }) {
 
   const pins = useMemo<MapPin[]>(() => {
     const out: MapPin[] = []
-    if (me) out.push({ id: 'me', pos: me, emoji: state.profile.emoji, label: sharing ? 'คุณ (แชร์อยู่)' : 'คุณ', me: true })
+    if (me) out.push({ id: 'me', pos: me, emoji: state.profile.emoji, photo: state.profile.avatarUrl, label: sharing ? 'คุณ (แชร์อยู่)' : 'คุณ', me: true })
     for (const p of pings) {
       const f = friends.find((x) => x.id === p.id)
-      if (f) out.push({ id: f.id, pos: p.pos, emoji: f.emoji, label: f.name })
+      if (f) out.push({ id: f.id, pos: p.pos, emoji: f.emoji, photo: f.avatarUrl, label: f.name })
     }
     if (showPlaces) {
       for (const pl of PLACES) out.push({ id: pl.id, pos: { lat: pl.lat, lng: pl.lng }, emoji: '🌳', label: pl.name })
@@ -155,10 +155,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
             const away = me ? distanceM(me, p.pos) : null
             return (
               <div key={p.id} className="card tight row">
-                <span className="avatar-wrap">
-                  <span className="avatar">{f.emoji}</span>
-                  <StatusDot online />
-                </span>
+                <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online />
                 <span className="grow">
                   <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
                     {f.name}
@@ -184,10 +181,7 @@ export default function LiveMap({ nav }: { nav: Nav }) {
         <div className="stack-8">
           {friends.map((f) => (
             <div key={f.id} className="card tight row">
-              <span className="avatar-wrap">
-                <span className="avatar">{f.emoji}</span>
-                <StatusDot online={f.sharingLocation} />
-              </span>
+              <Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} online={f.sharingLocation} />
               <span className="grow strong" style={{ fontSize: 14.5 }}>
                 {f.name}
               </span>
