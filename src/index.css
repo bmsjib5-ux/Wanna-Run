@@ -123,6 +123,7 @@ body {
 :root[data-bg] body { background: transparent; }
 :root[data-bg] .shell { background: none; }
 :root[data-bg] .card { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+:root[data-bg] .section-title, :root[data-bg] .topbar h1, :root[data-bg] .topbar .sub { text-shadow: 0 1px 8px rgba(0, 0, 0, .55); }
 
 .bg-preview {
   width: 64px; height: 64px; flex: none;
