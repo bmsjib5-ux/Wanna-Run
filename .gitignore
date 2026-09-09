@@ -26,3 +26,6 @@ dist-ssr
 # ตัวแปรสภาพแวดล้อม (มีคีย์จริง)
 .env
 .env.local
+
+# สร้างใหม่ทุกครั้งที่ build
+public/build-info.json
