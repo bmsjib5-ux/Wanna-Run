@@ -25,6 +25,7 @@ import type {
 import { initialState } from '../lib/seed'
 import { bump, emptyCounters, rollover } from '../lib/counters'
 import { normalizeCode, uid } from '../lib/id'
+import { whenLabel } from '../lib/format'
 import { pushNotice } from '../lib/notify'
 import { blobToDataUrl, squareThumbnail } from '../lib/image'
 import { describeAuthError, isCloudConfigured } from '../lib/supabase'
@@ -137,6 +138,13 @@ type Ctx = { state: AppState; actions: Actions; cloud: boolean; syncing: boolean
 
 const StoreContext = createContext<Ctx | null>(null)
 
+/** ข้อความหัวแจ้งเตือนตามคำตอบของเพื่อน */
+const REPLY_TITLE: Record<InviteReply, string> = {
+  going: 'ตอบรับแล้ว ✅',
+  maybe: 'อาจจะไป 🤔',
+  declined: 'ไปไม่ได้ ❌',
+}
+
 const AVATARS = ['🦊', '🐼', '🐰', '🐧', '🐨', '🐻', '🐥', '🦁', '🦄', '🐯', '🐸', '🐙']
 
 function hash(str: string): number {
@@ -163,6 +171,8 @@ export function StoreProvider({
   const migratedRef = useRef(false)
   // รับความคืบหน้าจากเซิร์ฟเวอร์แค่ครั้งแรก หลังจากนั้นในเครื่องเป็นตัวตั้ง
   const progressLoadedRef = useRef(false)
+  // เทียบคำชวนรอบก่อนเพื่อหาว่ามีอะไรใหม่ — ข้ามรอบแรกกันแจ้งเตือนย้อนหลังทั้งกอง
+  const invitesSeenRef = useRef(false)
 
   useEffect(() => {
     save(state, userId)
@@ -179,6 +189,43 @@ export function StoreProvider({
       if (alsoNotify) pushNotice(n.title, n.body)
     },
     [patch],
+  )
+
+  /** หาว่าคำชวนรอบนี้ต่างจากรอบก่อนตรงไหน แล้วแจ้งเตือนเฉพาะสิ่งที่เพิ่งเกิด */
+  const notifyInviteChanges = useCallback(
+    (before: RunInvite[], next: RunInvite[]) => {
+      const nameOf = (id: ID) => stateRef.current.friends.find((f) => f.id === id)?.name ?? 'เพื่อน'
+      const me = stateRef.current.profile.id
+
+      for (const invite of next) {
+        const old = before.find((i) => i.id === invite.id)
+
+        // มีคนชวนเราไปวิ่ง (คำชวนใหม่ที่เราไม่ได้เป็นเจ้าภาพ)
+        if (!old && !invite.hostIsMe && invite.status === 'open') {
+          addNotification({
+            kind: 'invite',
+            title: `${invite.hostId ? nameOf(invite.hostId) : 'เพื่อน'} ชวนคุณไปวิ่ง 📣`,
+            body: `${invite.title} · ${invite.place.name} · ${whenLabel(invite.startAt)}`,
+            goto: 'invites',
+          })
+          continue
+        }
+
+        // เพื่อนตอบคำชวนที่เราเป็นเจ้าภาพ
+        if (!invite.hostIsMe) continue
+        for (const [memberId, reply] of Object.entries(invite.replies)) {
+          if (memberId === me) continue
+          if (old?.replies[memberId] === reply) continue
+          addNotification({
+            kind: 'invite',
+            title: `${nameOf(memberId)} ${REPLY_TITLE[reply]}`,
+            body: `${invite.title} · ${invite.place.name} · ${whenLabel(invite.startAt)}`,
+            goto: 'invites',
+          })
+        }
+      }
+    },
+    [addNotification],
   )
 
   /** ดึงข้อมูลฝั่งเซิร์ฟเวอร์มาทับส่วนที่เป็นข้อมูลร่วม (โปรไฟล์ เพื่อน กลุ่ม นัดวิ่ง) */
@@ -208,6 +255,14 @@ export function StoreProvider({
       ['คะแนนเกม', scoresR],
     ] as const) {
       if (result.status === 'rejected') console.error(`ดึงข้อมูล${what}ไม่สำเร็จ`, result.reason)
+    }
+
+    // เพื่อนตอบคำชวน หรือมีคนชวนเราไปวิ่ง — เทียบกับรอบก่อนแล้วแจ้งเตือน
+    // (realtime ส่งสัญญาณมาแล้วเรียก refresh อยู่แล้ว ตรงนี้แค่หาว่าอะไรเปลี่ยน)
+    if (invitesR.status === 'fulfilled') {
+      const before = stateRef.current.invites
+      if (invitesSeenRef.current) notifyInviteChanges(before, invitesR.value)
+      invitesSeenRef.current = true
     }
 
     // ประวัติที่เคยเก็บไว้ในเครื่องก่อนมีตารางบนคลาวด์ ให้อัปขึ้นครั้งแรกที่ซิงก์สำเร็จ
@@ -261,7 +316,7 @@ export function StoreProvider({
       }
     })
     setSyncing(false)
-  }, [])
+  }, [notifyInviteChanges])
 
   // โหลดข้อมูลครั้งแรกและติดตามการเปลี่ยนแปลงแบบสด
   useEffect(() => {
