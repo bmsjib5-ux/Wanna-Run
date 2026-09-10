@@ -130,7 +130,29 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
           )}
           {!tracker.running && geo.status === 'denied' && <span className="chip bad">ไม่ได้สิทธิ์ตำแหน่ง</span>}
           {tracker.running && wake === 'held' && <span className="chip ok">🔆 จอไม่ดับ</span>}
+          {tracker.running && tracker.gpsStale && <span className="chip bad">📡 ไม่ได้สัญญาณ GPS</span>}
         </div>
+
+        {tracker.running && tracker.interrupted && (
+          <div className="card tight small" style={{ marginTop: 12, borderColor: 'rgba(255,196,77,.45)', color: 'var(--warn)', lineHeight: 1.7 }}>
+            ⚠️ ระบบหยุดแอปไปช่วงหนึ่งระหว่างวิ่ง (สลับไปแอปอื่น รับสาย หรือจอดับ)
+            <br />
+            ระยะทางช่วงที่หยุดไปไม่ได้ถูกบันทึก — วิ่งต่อได้ตามปกติ แต่ต้องเปิดหน้านี้ค้างไว้
+          </div>
+        )}
+
+        {tracker.running && tracker.gpsStale && !tracker.interrupted && (
+          <div className="tiny muted center" style={{ marginTop: 10, lineHeight: 1.6 }}>
+            ไม่ได้พิกัดใหม่มาสักพักแล้ว — ออกไปที่ที่เห็นท้องฟ้า และอย่าสลับไปแอปอื่น
+          </div>
+        )}
+
+        {!tracker.running && !isNative() && (
+          <div className="tiny muted center" style={{ marginTop: 10, lineHeight: 1.6 }}>
+            เวอร์ชันเว็บต้องเปิดหน้านี้ค้างไว้ตลอดการวิ่ง — ถ้าสลับไปแอปอื่นหรือรับสาย
+            ระบบจะหยุดหน้าเว็บและ GPS จะไม่บันทึกช่วงนั้น
+          </div>
+        )}
 
         {tracker.running && wake !== 'held' && !tracker.simulated && (
           <div className="tiny muted center" style={{ marginTop: 10, lineHeight: 1.6 }}>
@@ -225,15 +247,34 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
           <>
             <div className="card tight small" style={{ lineHeight: 1.7 }}>
               จับได้ <b>{Math.round(summary.distanceM)} ม.</b> ใน {formatDuration(summary.movingMs)}
-              {tracker.accuracy != null && tracker.accuracy > 40 && (
+              {tracker.interrupted ? (
                 <>
                   <br />
-                  GPS ยังไม่แม่น (±{Math.round(tracker.accuracy)} ม.) — จุดที่คลาดเกิน 40 ม. จะไม่ถูกนับ
+                  <b style={{ color: 'var(--warn)' }}>ระบบหยุดแอปไประหว่างวิ่ง</b> — ตอนสลับไปแอปอื่น รับสาย
+                  หรือจอดับ เบราว์เซอร์บนมือถือจะหยุดหน้าเว็บไว้ ทำให้ GPS ไม่ได้บันทึกช่วงนั้น
+                  <br />
+                  คราวหน้าเปิดหน้านี้ค้างไว้ตลอดการวิ่ง (แอปจะกันจอดับให้อยู่แล้ว)
+                </>
+              ) : tracker.lastFixAt == null ? (
+                <>
+                  <br />
+                  <b>ยังไม่ได้พิกัดจาก GPS เลย</b> — ถ้าอยู่ในอาคารหรือที่อับสัญญาณ มือถือจะหาตำแหน่งไม่ได้
+                  <br />
+                  ออกไปที่ที่เห็นท้องฟ้า รอให้ขึ้นชิป "GPS ±20 ม." ก่อนค่อยกดเริ่ม
+                </>
+              ) : (
+                <>
+                  {tracker.accuracy != null && tracker.accuracy > 40 && (
+                    <>
+                      <br />
+                      GPS ยังไม่แม่น (±{Math.round(tracker.accuracy)} ม.) — จุดที่คลาดเกิน 40 ม. จะไม่ถูกนับ
+                    </>
+                  )}
+                  <br />
+                  ลองออกไปที่โล่ง รอให้ขึ้น "GPS ±20 ม." ก่อนกดเริ่ม แล้ววิ่งอย่างน้อยสักสิบเมตร
+                  หรือใช้โหมดจำลองเพื่อทดลองแอปในอาคาร
                 </>
               )}
-              <br />
-              ลองออกไปที่โล่ง รอให้ขึ้น "GPS ±20 ม." ก่อนกดเริ่ม แล้ววิ่งอย่างน้อยสักสิบเมตร
-              หรือใช้โหมดจำลองเพื่อทดลองแอปในอาคาร
             </div>
             <button
               className="btn primary block"
