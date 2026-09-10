@@ -72,10 +72,35 @@ export type TrackerState = {
   gpsStale: boolean
   /** ระบบปฏิบัติการหยุด/ปิดแอปกลางคัน ระยะช่วงนั้นจึงหายไป */
   interrupted: boolean
+  /** จำนวนพิกัดที่ได้รับจาก GPS ทั้งหมด */
+  fixes: number
+  /** จำนวนพิกัดที่เอามาคิดระยะจริง */
+  used: number
+  /** จำนวนพิกัดที่ทิ้งเพราะหยาบเกินไปหรือกระโดดผิดปกติ */
+  skipped: number
 }
 
-const MAX_ACCURACY_M = 40
-const MAX_JUMP_M = 120
+/**
+ * เกณฑ์คัดกรองพิกัด
+ *
+ * ของเดิมตัดทิ้งทุกจุดที่คลาดเกิน 40 ม. ซึ่งเข้มเกินไปสำหรับมือถือจริง —
+ * โดยเฉพาะ iPhone บนเว็บที่มักได้ค่าราว 50-65 ม. เมื่อไม่ได้จับดาวเทียมเต็มที่
+ * ผลคือทุกจุดถูกทิ้ง ระยะจึงค้างที่ 0.00 ตลอดทั้งที่เดินอยู่จริง
+ *
+ * ตอนนี้รับกว้างขึ้น แต่ใช้เกณฑ์ที่ยืดตามความคลาดเคลื่อนแทน:
+ * ยิ่งสัญญาณหยาบ ยิ่งต้องขยับมากขึ้นถึงจะนับว่าเคลื่อนที่จริง
+ */
+export const MAX_ACCURACY_M = 65
+
+/** ต้องขยับเกินเท่านี้ถึงนับเป็นระยะ (กันตัวเลขวิ่งเองตอนยืนนิ่ง) */
+function stepFloorM(accuracy: number): number {
+  return Math.max(3, accuracy * 0.3)
+}
+
+/** ไกลเกินเท่านี้ถือว่าสัญญาณเด้ง ไม่ใช่การเคลื่อนที่ */
+function jumpLimitM(accuracy: number): number {
+  return Math.max(120, accuracy * 3)
+}
 /** ไม่ได้พิกัดใหม่นานกว่านี้ถือว่าผิดปกติ ต้องเตือนผู้ใช้ทันทีระหว่างวิ่ง */
 const GPS_STALE_MS = 30_000
 /** สแนปช็อตห่างจากปัจจุบันเกินนี้ แปลว่าแอปถูกระบบหยุดไปกลางคัน */
@@ -141,6 +166,9 @@ export function useRunTracker() {
     lastFixAt: null,
     gpsStale: false,
     interrupted: false,
+    fixes: 0,
+    used: 0,
+    skipped: 0,
   })
   const [inviteId, setInviteId] = useState<string | undefined>(undefined)
 
@@ -172,20 +200,28 @@ export function useRunTracker() {
     setS((prev) => {
       if (!prev.running || pausedRef.current) return prev
       const now = Date.now()
-      const fix = { accuracy, lastFixAt: now, gpsStale: false }
+      const acc = accuracy ?? MAX_ACCURACY_M
+      // ได้สัญญาณแล้ว ไม่ว่าจะเอามาคิดระยะได้หรือไม่
+      const base = { ...prev, accuracy, lastFixAt: now, gpsStale: false, fixes: prev.fixes + 1 }
+
+      // หยาบเกินกว่าจะบอกได้ว่าขยับจริงหรือแค่สัญญาณแกว่ง
+      if (acc > MAX_ACCURACY_M) return { ...base, skipped: prev.skipped + 1 }
+
       const point: TrackPoint = { lat, lng, t: now }
-      if (!prev.last) return { ...prev, ...fix, last: point, path: [...prev.path, point] }
+      if (!prev.last) return { ...base, last: point, path: [...prev.path, point], used: prev.used + 1 }
+
       const d = distanceM(prev.last, point)
-      // ทิ้งจุดที่กระโดดไกลผิดปกติ (สัญญาณเด้ง)
-      if (d > MAX_JUMP_M) return { ...prev, ...fix }
-      // ทิ้งการขยับเล็กน้อยตอนยืนนิ่ง (จุดอ้างอิงยังอยู่ที่เดิม ระยะจึงสะสมต่อได้)
-      if (d < 2) return { ...prev, ...fix }
+      // กระโดดไกลผิดปกติ (สัญญาณเด้ง)
+      if (d > jumpLimitM(acc)) return { ...base, skipped: prev.skipped + 1 }
+      // ยังไม่พ้นค่าความคลาดเคลื่อน — เก็บจุดอ้างอิงเดิมไว้ ระยะจะสะสมเมื่อขยับพอ
+      if (d < stepFloorM(acc)) return base
+
       return {
-        ...prev,
-        ...fix,
+        ...base,
         distanceM: prev.distanceM + d,
         path: [...prev.path, point],
         last: point,
+        used: prev.used + 1,
       }
     })
   }, [])
@@ -221,13 +257,7 @@ export function useRunTracker() {
       // ในแอปมือถือใช้ตัวติดตามเนทีฟ ซึ่งทำงานต่อแม้ย่อแอปหรือจอดับ
       if (isNative()) {
         stopNative.current = watchPositionNative(
-          (p) => {
-            if (p.accuracy > MAX_ACCURACY_M) {
-              setS((prev) => ({ ...prev, accuracy: p.accuracy, lastFixAt: Date.now(), gpsStale: false }))
-              return
-            }
-            addPoint(p.lat, p.lng, p.accuracy)
-          },
+          (p) => addPoint(p.lat, p.lng, p.accuracy),
           (message) => setS((prev) => ({ ...prev, error: message })),
         )
         return true
@@ -236,14 +266,7 @@ export function useRunTracker() {
       if (!navigator.geolocation) return false
 
       watchId.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          if (pos.coords.accuracy > MAX_ACCURACY_M) {
-            // ยังถือว่าได้สัญญาณ แค่หยาบเกินกว่าจะเอามาคิดระยะ
-            setS((prev) => ({ ...prev, accuracy: pos.coords.accuracy, lastFixAt: Date.now(), gpsStale: false }))
-            return
-          }
-          addPoint(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy)
-        },
+        (pos) => addPoint(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
         (err) => setS((prev) => ({ ...prev, error: describeGeoError(err) })),
         { enableHighAccuracy: true, maximumAge: 1000, timeout: 20_000 },
       )
@@ -273,6 +296,9 @@ export function useRunTracker() {
         lastFixAt: null,
         gpsStale: false,
         interrupted: false,
+        fixes: 0,
+        used: 0,
+        skipped: 0,
       })
       if (simulated && origin) addPoint(origin.lat, origin.lng, 5)
       if (!engage(simulated, origin)) {
@@ -321,6 +347,9 @@ export function useRunTracker() {
       // สแนปช็อตถูกเขียนทุก 10 วินาทีระหว่างวิ่ง ถ้าห่างกว่านั้นมากแปลว่า
       // ระบบหยุดแอปไปช่วงหนึ่ง (สลับแอป จอดับ หรือหน่วยความจำไม่พอ)
       interrupted: !saved.paused && Date.now() - saved.savedAt > INTERRUPTED_GAP_MS,
+      fixes: 0,
+      used: 0,
+      skipped: 0,
     })
     // แหล่งข้อมูลจะถูกต่อโดย effect รอบถัดไปเมื่อสเตตเป็น running แล้ว
   }, [engage, s.running, s.simulated, s.path])
@@ -398,6 +427,9 @@ export function useRunTracker() {
       lastFixAt: null,
       gpsStale: false,
       interrupted: false,
+      fixes: 0,
+      used: 0,
+      skipped: 0,
     })
   }, [clearAll])
 

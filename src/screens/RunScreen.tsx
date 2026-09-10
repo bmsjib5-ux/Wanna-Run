@@ -4,7 +4,7 @@ import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import { useStore } from '../state/store'
-import { useCurrentPosition } from '../lib/useGeo'
+import { MAX_ACCURACY_M, useCurrentPosition } from '../lib/useGeo'
 import { useRun } from '../state/run'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { uid } from '../lib/id'
@@ -132,6 +132,14 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
           {tracker.running && wake === 'held' && <span className="chip ok">🔆 จอไม่ดับ</span>}
           {tracker.running && tracker.gpsStale && <span className="chip bad">📡 ไม่ได้สัญญาณ GPS</span>}
         </div>
+
+        {tracker.running && !tracker.simulated && (
+          <div className="tiny muted center" style={{ marginTop: 8 }}>
+            {tracker.fixes === 0
+              ? 'กำลังรอพิกัดแรกจาก GPS…'
+              : `ได้พิกัด ${tracker.fixes} จุด · ใช้คิดระยะ ${tracker.used}${tracker.skipped > 0 ? ` · ทิ้ง ${tracker.skipped} (สัญญาณหยาบ)` : ''}`}
+          </div>
+        )}
 
         {tracker.running && tracker.interrupted && (
           <div className="card tight small" style={{ marginTop: 12, borderColor: 'rgba(255,196,77,.45)', color: 'var(--warn)', lineHeight: 1.7 }}>
@@ -264,14 +272,18 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
                 </>
               ) : (
                 <>
-                  {tracker.accuracy != null && tracker.accuracy > 40 && (
+                  <br />
+                  ได้พิกัด {tracker.fixes} จุด · ใช้คิดระยะ {tracker.used} · ทิ้ง {tracker.skipped}
+                  {tracker.skipped > 0 && tracker.used === 0 && (
                     <>
                       <br />
-                      GPS ยังไม่แม่น (±{Math.round(tracker.accuracy)} ม.) — จุดที่คลาดเกิน 40 ม. จะไม่ถูกนับ
+                      <b style={{ color: 'var(--warn)' }}>สัญญาณหยาบเกินไปทุกจุด</b> (±
+                      {Math.round(tracker.accuracy ?? 0)} ม.) — มือถือกำลังหาตำแหน่งจากเสาสัญญาณ/Wi-Fi
+                      แทนดาวเทียม จึงบอกไม่ได้ว่าขยับจริงหรือไม่
                     </>
                   )}
                   <br />
-                  ลองออกไปที่โล่ง รอให้ขึ้น "GPS ±20 ม." ก่อนกดเริ่ม แล้ววิ่งอย่างน้อยสักสิบเมตร
+                  ออกไปที่ที่เห็นท้องฟ้า รอให้ตัวเลข GPS ลงมาต่ำกว่า ±{MAX_ACCURACY_M} ม. ก่อนกดเริ่ม
                   หรือใช้โหมดจำลองเพื่อทดลองแอปในอาคาร
                 </>
               )}
