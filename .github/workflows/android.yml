@@ -35,6 +35,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          GIT_COMMIT: ${{ github.sha }}
         run: npm run build
 
       - name: ซิงก์เข้าโปรเจกต์ Android
@@ -70,6 +71,17 @@ jobs:
         if: steps.keystore.outputs.signed != 'true'
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: สรุปว่า APK นี้เชื่อมเซิร์ฟเวอร์หรือเป็นโหมดทดลอง
+        # พิมพ์ไว้ท้าย log เพื่อให้เช็คได้ทันทีว่า secrets ติดมาด้วยไหม
+        run: |
+          echo "── build-info.json ──"
+          cat dist/build-info.json
+          if grep -q '"cloud": true' dist/build-info.json; then
+            echo "::notice::APK นี้เชื่อมกับ Supabase (มีหน้าเข้าสู่ระบบ)"
+          else
+            echo "::warning::APK นี้เป็นโหมดทดลอง — ยังไม่ได้ตั้ง secrets VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY"
+          fi
 
       - name: เก็บไฟล์ APK ไว้ให้ดาวน์โหลด
         uses: actions/upload-artifact@v4

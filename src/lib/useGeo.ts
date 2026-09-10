@@ -66,10 +66,22 @@ export type TrackerState = {
   accuracy: number | null
   error: string | null
   simulated: boolean
+  /** เวลาที่ได้พิกัดจาก GPS ครั้งล่าสุด (null = ยังไม่เคยได้เลย) */
+  lastFixAt: number | null
+  /** เงียบจาก GPS นานผิดปกติ — มักเพราะไม่เห็นท้องฟ้า หรือระบบหยุดแอปไว้ */
+  gpsStale: boolean
+  /** ระบบปฏิบัติการหยุด/ปิดแอปกลางคัน ระยะช่วงนั้นจึงหายไป */
+  interrupted: boolean
 }
 
 const MAX_ACCURACY_M = 40
 const MAX_JUMP_M = 120
+/** ไม่ได้พิกัดใหม่นานกว่านี้ถือว่าผิดปกติ ต้องเตือนผู้ใช้ทันทีระหว่างวิ่ง */
+const GPS_STALE_MS = 30_000
+/** สแนปช็อตห่างจากปัจจุบันเกินนี้ แปลว่าแอปถูกระบบหยุดไปกลางคัน */
+const INTERRUPTED_GAP_MS = 25_000
+/** เขียนสแนปช็อตทุกช่วงนี้ แม้ยังไม่ได้พิกัดใหม่ เพื่อให้รู้เวลาที่แอปหยุดไปจริง ๆ */
+const SNAPSHOT_EVERY_MS = 10_000
 
 /** สแนปช็อตของการวิ่งที่ค้างอยู่ เก็บในเครื่องเพื่อให้กลับมาต่อได้หลังสลับหน้า/รีโหลด/แอปถูกปิด */
 type SavedRun = {
@@ -126,6 +138,9 @@ export function useRunTracker() {
     accuracy: null,
     error: null,
     simulated: false,
+    lastFixAt: null,
+    gpsStale: false,
+    interrupted: false,
   })
   const [inviteId, setInviteId] = useState<string | undefined>(undefined)
 
@@ -156,19 +171,21 @@ export function useRunTracker() {
   const addPoint = useCallback((lat: number, lng: number, accuracy: number | null) => {
     setS((prev) => {
       if (!prev.running || pausedRef.current) return prev
-      const point: TrackPoint = { lat, lng, t: Date.now() }
-      if (!prev.last) return { ...prev, last: point, path: [...prev.path, point], accuracy }
+      const now = Date.now()
+      const fix = { accuracy, lastFixAt: now, gpsStale: false }
+      const point: TrackPoint = { lat, lng, t: now }
+      if (!prev.last) return { ...prev, ...fix, last: point, path: [...prev.path, point] }
       const d = distanceM(prev.last, point)
       // ทิ้งจุดที่กระโดดไกลผิดปกติ (สัญญาณเด้ง)
-      if (d > MAX_JUMP_M) return { ...prev, accuracy }
-      // ทิ้งการขยับเล็กน้อยตอนยืนนิ่ง
-      if (d < 2) return { ...prev, accuracy }
+      if (d > MAX_JUMP_M) return { ...prev, ...fix }
+      // ทิ้งการขยับเล็กน้อยตอนยืนนิ่ง (จุดอ้างอิงยังอยู่ที่เดิม ระยะจึงสะสมต่อได้)
+      if (d < 2) return { ...prev, ...fix }
       return {
         ...prev,
+        ...fix,
         distanceM: prev.distanceM + d,
         path: [...prev.path, point],
         last: point,
-        accuracy,
       }
     })
   }, [])
@@ -177,11 +194,16 @@ export function useRunTracker() {
   const engage = useCallback(
     (simulated: boolean, origin?: LatLng) => {
       tickTimer.current = window.setInterval(() => {
-        setS((prev) =>
-          prev.running && !pausedRef.current
-            ? { ...prev, elapsedMs: accumulated.current + (Date.now() - startedAt.current) }
-            : prev,
-        )
+        setS((prev) => {
+          if (!prev.running || pausedRef.current) return prev
+          const now = Date.now()
+          const elapsedMs = accumulated.current + (now - startedAt.current)
+          // เงียบจาก GPS นานเกินไป (นับจากพิกัดล่าสุด หรือจากตอนกดเริ่มถ้ายังไม่เคยได้เลย)
+          const since = prev.lastFixAt ? now - prev.lastFixAt : elapsedMs
+          const gpsStale = !prev.simulated && since > GPS_STALE_MS
+          if (gpsStale === prev.gpsStale) return { ...prev, elapsedMs }
+          return { ...prev, elapsedMs, gpsStale }
+        })
       }, 250)
 
       if (simulated) {
@@ -201,7 +223,7 @@ export function useRunTracker() {
         stopNative.current = watchPositionNative(
           (p) => {
             if (p.accuracy > MAX_ACCURACY_M) {
-              setS((prev) => ({ ...prev, accuracy: p.accuracy }))
+              setS((prev) => ({ ...prev, accuracy: p.accuracy, lastFixAt: Date.now(), gpsStale: false }))
               return
             }
             addPoint(p.lat, p.lng, p.accuracy)
@@ -216,7 +238,8 @@ export function useRunTracker() {
       watchId.current = navigator.geolocation.watchPosition(
         (pos) => {
           if (pos.coords.accuracy > MAX_ACCURACY_M) {
-            setS((prev) => ({ ...prev, accuracy: pos.coords.accuracy }))
+            // ยังถือว่าได้สัญญาณ แค่หยาบเกินกว่าจะเอามาคิดระยะ
+            setS((prev) => ({ ...prev, accuracy: pos.coords.accuracy, lastFixAt: Date.now(), gpsStale: false }))
             return
           }
           addPoint(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy)
@@ -247,6 +270,9 @@ export function useRunTracker() {
         accuracy: null,
         error: null,
         simulated,
+        lastFixAt: null,
+        gpsStale: false,
+        interrupted: false,
       })
       if (simulated && origin) addPoint(origin.lat, origin.lng, 5)
       if (!engage(simulated, origin)) {
@@ -270,7 +296,11 @@ export function useRunTracker() {
     const saved = loadSavedRun()
     if (!saved) return
     // เวลาที่แอปปิดไปไม่นับ: ปิดยอดเวลาที่วิ่งไว้ แล้วเริ่มนับใหม่จากตอนนี้
-    accumulated.current = saved.paused ? saved.accumulated : saved.accumulated + (saved.savedAt - saved.startedAt)
+    // กันค่าติดลบเผื่อสแนปช็อตเพี้ยน (เช่น นาฬิกาเครื่องถูกปรับย้อนหลัง)
+    accumulated.current = Math.max(
+      0,
+      saved.paused ? saved.accumulated : saved.accumulated + (saved.savedAt - saved.startedAt),
+    )
     startedAt.current = Date.now()
     pausedRef.current = saved.paused
     inviteRef.current = saved.inviteId
@@ -286,29 +316,45 @@ export function useRunTracker() {
       accuracy: null,
       error: null,
       simulated: saved.simulated,
+      lastFixAt: null,
+      gpsStale: false,
+      // สแนปช็อตถูกเขียนทุก 10 วินาทีระหว่างวิ่ง ถ้าห่างกว่านั้นมากแปลว่า
+      // ระบบหยุดแอปไปช่วงหนึ่ง (สลับแอป จอดับ หรือหน่วยความจำไม่พอ)
+      interrupted: !saved.paused && Date.now() - saved.savedAt > INTERRUPTED_GAP_MS,
     })
     // แหล่งข้อมูลจะถูกต่อโดย effect รอบถัดไปเมื่อสเตตเป็น running แล้ว
   }, [engage, s.running, s.simulated, s.path])
 
-  // บันทึกสแนปช็อตทุกครั้งที่เส้นทาง/สถานะเปลี่ยน (นาฬิกาเดินทุก 250ms ไม่ทำให้เซฟ)
+  /**
+   * บันทึกสแนปช็อตทุกครั้งที่เส้นทาง/สถานะเปลี่ยน และเขียนซ้ำทุก 10 วินาที
+   *
+   * การเขียนซ้ำสำคัญกว่าที่คิด: ถ้า GPS ยังจับไม่ได้เลย เส้นทางจะไม่ขยับ
+   * สแนปช็อตก็จะค้างอยู่ที่เวลาตอนกดเริ่ม พอแอปถูกระบบปิดแล้วกลับมา
+   * จะดูเหมือนเพิ่งเริ่มวิ่ง ทั้งที่ผ่านไปหลายนาที และไม่รู้ว่าถูกขัดจังหวะ
+   */
   useEffect(() => {
     if (!s.running) return
-    const snapshot: SavedRun = {
-      version: 1,
-      path: s.path,
-      distanceM: s.distanceM,
-      paused: s.paused,
-      simulated: s.simulated,
-      startedAt: startedAt.current,
-      accumulated: accumulated.current,
-      inviteId: inviteRef.current,
-      savedAt: Date.now(),
+    const write = () => {
+      const snapshot: SavedRun = {
+        version: 1,
+        path: s.path,
+        distanceM: s.distanceM,
+        paused: s.paused,
+        simulated: s.simulated,
+        startedAt: startedAt.current,
+        accumulated: accumulated.current,
+        inviteId: inviteRef.current,
+        savedAt: Date.now(),
+      }
+      try {
+        localStorage.setItem(ACTIVE_RUN_KEY, JSON.stringify(snapshot))
+      } catch {
+        /* เต็มหรือปิดใช้ ก็แค่กู้คืนไม่ได้ */
+      }
     }
-    try {
-      localStorage.setItem(ACTIVE_RUN_KEY, JSON.stringify(snapshot))
-    } catch {
-      /* เต็มหรือปิดใช้ ก็แค่กู้คืนไม่ได้ */
-    }
+    write()
+    const timer = window.setInterval(write, SNAPSHOT_EVERY_MS)
+    return () => window.clearInterval(timer)
   }, [s.running, s.path, s.distanceM, s.paused, s.simulated])
 
   const pause = useCallback(() => {
@@ -349,6 +395,9 @@ export function useRunTracker() {
       accuracy: null,
       error: null,
       simulated: false,
+      lastFixAt: null,
+      gpsStale: false,
+      interrupted: false,
     })
   }, [clearAll])
 

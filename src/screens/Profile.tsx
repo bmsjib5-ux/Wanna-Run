@@ -6,6 +6,7 @@ import Map from '../components/Map'
 import Avatar from '../components/Avatar'
 import AvatarPicker from '../components/AvatarPicker'
 import ThemePicker from '../components/ThemePicker'
+import AboutBuild from '../components/AboutBuild'
 import { levelOf, useStore } from '../state/store'
 import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
@@ -202,6 +203,7 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 
       <div className="section-title">ตั้งค่า</div>
       <ThemePicker />
+      <AboutBuild />
       <div className="stack-8" style={{ marginTop: 12 }}>
         {cloud && <SignOutButton />}
         <button className="btn danger block" onClick={() => setConfirmReset(true)}>
@@ -210,7 +212,7 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
       </div>
       <div className="card tight muted tiny" style={{ marginTop: 12, lineHeight: 1.7 }}>
         {cloud
-          ? 'เพื่อน กลุ่ม และนัดวิ่งซิงก์ขึ้นเซิร์ฟเวอร์ ส่วนประวัติการวิ่ง ภารกิจ และคะแนนเกมเก็บไว้ในเครื่องนี้เท่านั้น'
+          ? 'เพื่อน กลุ่ม นัดวิ่ง ประวัติการวิ่ง ภารกิจ และคะแนนเกม ซิงก์ขึ้นเซิร์ฟเวอร์ เปลี่ยนเครื่องแล้วข้อมูลยังอยู่ ส่วนธีมและรูปพื้นหลังเป็นค่าเฉพาะเครื่องนี้'
           : 'Wanna Run? เก็บข้อมูลทั้งหมดไว้ในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการส่งขึ้นเซิร์ฟเวอร์'}
       </div>
 

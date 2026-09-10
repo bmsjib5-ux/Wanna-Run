@@ -220,6 +220,13 @@ export default function LiveMap({ nav, initialPin }: { nav: Nav; initialPin?: Pl
         className="map-box map-full"
         follow
         onPick={dropPin}
+        layers
+        locating={geo.status === 'locating'}
+        onLocate={() => {
+          // เอาหมุดออกเพื่อให้ศูนย์กลางกลับไปที่ตำแหน่งเรา แล้วสั่งหา GPS ใหม่
+          setPin(null)
+          geo.locate()
+        }}
       />
       <div className="muted tiny center" style={{ marginTop: 6 }}>
         แตะบนแผนที่เพื่อปักหมุด
