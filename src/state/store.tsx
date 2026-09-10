@@ -230,9 +230,11 @@ export function StoreProvider({
     setState((s) => {
       // ความคืบหน้าเอาค่าจากเซิร์ฟเวอร์เฉพาะครั้งแรก หลังจากนั้นในเครื่องเป็นตัวตั้ง
       // แล้วค่อยส่งขึ้นไปทับ (ไม่งั้นสแนปช็อตเก่าจะย้อน XP ที่เพิ่งได้)
+      // ถือว่า "โหลดแล้ว" เมื่อถามเซิร์ฟเวอร์สำเร็จ แม้จะยังไม่มีแถว (ผู้ใช้ใหม่)
+      // ไม่งั้นจะติดล็อก: รอค่าจากเซิร์ฟเวอร์ก่อนถึงจะยอมเขียน แต่แถวไม่มีวันถูกสร้าง
       const progress = progressR.status === 'fulfilled' ? progressR.value : null
       const takeProgress = progress && !progressLoadedRef.current
-      if (progress) progressLoadedRef.current = true
+      if (progressR.status === 'fulfilled') progressLoadedRef.current = true
       const scores = scoresR.status === 'fulfilled' ? scoresR.value : null
 
       const profile = profileR.status === 'fulfilled' && profileR.value ? profileR.value : s.profile
