@@ -15,6 +15,7 @@ import type {
 import { requireSupabase } from './supabase'
 import { squareThumbnail } from './image'
 import { simplifyPath } from './geo'
+import { startOfWeek } from './format'
 import { setServerTime } from './presence'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
@@ -41,6 +42,8 @@ type ProfileRow = {
   sharing_location: boolean
   last_active_at: string
   is_online?: boolean | null
+  weekly_score?: number | null
+  weekly_score_at?: string | null
   created_at: string
 }
 
@@ -64,6 +67,12 @@ function toProfile(row: ProfileRow, local: Pick<Profile, 'level' | 'xp' | 'coins
   }
 }
 
+/** คะแนนสัปดาห์นี้เท่านั้น ของสัปดาห์ก่อนถือว่าเป็น 0 (กระดานรีเซ็ตทุกสัปดาห์) */
+function weeklyScoreOf(row: ProfileRow): number {
+  if (!row.weekly_score || !row.weekly_score_at) return 0
+  return new Date(row.weekly_score_at).getTime() >= startOfWeek() ? row.weekly_score : 0
+}
+
 function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Friend {
   return {
     id: row.id,
@@ -75,6 +84,7 @@ function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Frie
     bio: row.bio ?? '',
     totalKm: Math.round(Number(row.total_km ?? 0)),
     avgPaceSec: row.avg_pace_sec ?? 360,
+    weeklyScore: weeklyScoreOf(row),
     home,
     sharingLocation: row.sharing_location,
     lastActiveAt: new Date(row.last_active_at).getTime(),
@@ -703,6 +713,17 @@ export async function saveProgress(p: Progress): Promise<void> {
     },
     { onConflict: 'owner' },
   )
+  if (error) throw error
+}
+
+/** ส่งคะแนนมินิเกมสัปดาห์นี้ขึ้นโปรไฟล์ ให้เพื่อนเห็นบนกระดาน */
+export async function updateWeeklyScore(score: number): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('profiles')
+    .update({ weekly_score: Math.round(score), weekly_score_at: new Date().toISOString() })
+    .eq('id', uid)
   if (error) throw error
 }
 

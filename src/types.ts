@@ -29,6 +29,8 @@ export type Friend = {
   bio: string
   totalKm: number
   avgPaceSec: number
+  /** คะแนนมินิเกมสัปดาห์นี้ (0 ถ้ายังไม่เล่นหรือเป็นคะแนนของสัปดาห์ก่อน) */
+  weeklyScore: number
   /** ตำแหน่งฐาน ใช้จำลองการเคลื่อนที่บนแผนที่สด */
   home: LatLng
   sharingLocation: boolean

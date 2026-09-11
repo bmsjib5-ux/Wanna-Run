@@ -129,7 +129,7 @@ export default function Games({ nav, tab: initialTab }: { nav: Nav; tab?: string
                 <div className="strong" style={{ fontSize: 14.5 }}>
                   อันดับคะแนนมินิเกมสัปดาห์นี้
                 </div>
-                <div className="muted small">คะแนนสะสม {state.counters.weekly.gameScore} แต้ม</div>
+                <div className="muted small">คะแนนของคุณสัปดาห์นี้ {state.counters.weekly.gameScore} แต้ม</div>
               </div>
             </div>
             <div className="stack-8" style={{ marginTop: 12 }}>
@@ -244,16 +244,21 @@ function routeFor(m: Mission): Parameters<Nav>[0] {
 }
 
 /** ตารางอันดับตัวอย่าง: คะแนนเพื่อนสร้างจากค่าคงที่ของแต่ละคนเพื่อให้ผลนิ่ง */
+/**
+ * กระดานคะแนนของจริง: ใช้คะแนนสัปดาห์นี้ที่เพื่อนแต่ละคนส่งขึ้นโปรไฟล์
+ * (ของเดิมคิดเลขของเพื่อนขึ้นเองจากระยะวิ่งสะสม แต่ละเครื่องจึงเห็นไม่ตรงกัน)
+ */
 function leaderboard(
   myScore: number,
   myName: string,
   myEmoji: string,
-  friends: Array<{ id: string; name: string; emoji: string; status: string; totalKm: number }>,
+  friends: Array<{ id: string; name: string; emoji: string; status: string; weeklyScore: number }>,
 ) {
   const rows = friends
     .filter((f) => f.status === 'friend')
-    .slice(0, 5)
-    .map((f) => ({ name: f.name, emoji: f.emoji, score: 120 + ((f.totalKm * 7) % 480), me: false }))
+    .map((f) => ({ name: f.name, emoji: f.emoji, score: f.weeklyScore, me: false }))
   rows.push({ name: myName, emoji: myEmoji, score: myScore, me: true })
-  return rows.sort((a, b) => b.score - a.score)
+  return rows
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'th'))
+    .slice(0, 6)
 }

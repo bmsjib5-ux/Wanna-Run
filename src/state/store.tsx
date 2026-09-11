@@ -397,6 +397,10 @@ export function StoreProvider({
           lastSpinAt: state.lastSpinAt,
         })
         .catch((err: Error) => console.error('เก็บความคืบหน้าไม่สำเร็จ', err))
+      // คะแนนสัปดาห์นี้เก็บไว้บนโปรไฟล์ด้วย เพราะเป็นข้อมูลที่เพื่อนต้องเห็นบนกระดาน
+      void api
+        .updateWeeklyScore(state.counters.weekly.gameScore)
+        .catch((err: Error) => console.error('เก็บคะแนนสัปดาห์ไม่สำเร็จ', err))
     }, 3000)
     return () => window.clearTimeout(timer)
   }, [cloud, state.profile.xp, state.profile.coins, state.counters, claimedKey, state.lastSpinAt])
@@ -540,6 +544,7 @@ export function StoreProvider({
           home: { lat: 13.7305 + ((h % 100) - 50) / 5000, lng: 100.5418 + ((h % 71) - 35) / 5000 },
           sharingLocation: false,
           lastActiveAt: Date.now(),
+          weeklyScore: 0,
         }
         patch((s2) => ({ ...s2, friends: [...s2.friends, invented] }))
         scheduleAccept(invented)
