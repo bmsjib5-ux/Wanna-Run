@@ -1,229 +1,59 @@
 import { useMemo } from 'react'
+import { ArrowRight, Bell, CalendarDays, Flag, Footprints, MapPin, Plus, Settings, Users } from 'lucide-react'
 import type { Nav } from '../App'
-import TopBar from '../components/TopBar'
-import InviteCard from '../components/InviteCard'
 import Avatar from '../components/Avatar'
-import { levelOf, missionsWithProgress, useStore } from '../state/store'
-import { agoLabel, startOfWeek } from '../lib/format'
-import { formatDuration, formatKm } from '../lib/geo'
-import { isOnline, useNow } from '../lib/presence'
-import { computeStreak } from '../lib/streak'
+import InviteCard from '../components/InviteCard'
 import StreakCard from '../components/StreakCard'
+import { Button, Card, CardContent } from '../components/ui'
+import { useStore } from '../state/store'
+import { startOfWeek } from '../lib/format'
+import { computeStreak } from '../lib/streak'
+import { isOnline, useNow } from '../lib/presence'
 
 export default function Home({ nav }: { nav: Nav }) {
   const { state, cloud } = useStore()
-  const { profile, runs, invites, friends, notifications } = state
-
-  const lvl = levelOf(profile.xp)
-  const unread = notifications.filter((n) => !n.read).length
-
-  const weekKm = useMemo(() => {
-    const from = startOfWeek()
-    return runs.filter((r) => r.startedAt >= from).reduce((sum, r) => sum + r.distanceM, 0) / 1000
-  }, [runs])
-
-  const upcoming = useMemo(
-    () =>
-      invites
-        .filter((i) => i.status === 'open' && i.startAt > Date.now() - 3600_000)
-        .sort((a, b) => a.startAt - b.startAt)
-        .slice(0, 2),
-    [invites],
-  )
-
-  const missions = useMemo(
-    () => missionsWithProgress(state).filter((m) => m.period === 'daily'),
-    [state],
-  )
-  const doneToday = missions.filter((m) => m.progress >= m.target).length
-
+  const { profile, runs, friends, invites, notifications } = state
   const now = useNow()
-  const online = friends.filter((f) => f.status === 'friend' && isOnline(f, now))
-  const sharing = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
-  const pending = friends.filter((f) => f.status === 'incoming').length
-  const lastRun = state.runs[0]
+  const unread = notifications.filter(n => !n.read).length
+  const total = runs.reduce((sum, r) => sum + r.distanceM, 0) / 1000
+  const weekStart = startOfWeek()
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const start = new Date(weekStart); start.setDate(start.getDate() + i)
+    const end = new Date(start); end.setDate(end.getDate() + 1)
+    return runs.filter(r => r.startedAt >= +start && r.startedAt < +end).reduce((sum, r) => sum + r.distanceM, 0) / 1000
+  })
+  const week = days.reduce((sum, n) => sum + n, 0)
+  const max = Math.max(1, ...days)
+  const labels = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.']
+  const upcoming = invites.filter(i => i.status === 'open' && i.startAt > now - 3600000).sort((a, b) => a.startAt - b.startAt).slice(0, 2)
+  const connected = friends.filter(f => f.status === 'friend')
+  const online = connected.filter(f => isOnline(f, now))
   const streak = useMemo(() => computeStreak(runs), [runs])
-
-  const goalPct = Math.min(100, (weekKm / Math.max(1, profile.weeklyGoalKm)) * 100)
-
-  return (
-    <>
-      <TopBar
-        left={
-          <button onClick={() => nav('profile')} aria-label="โปรไฟล์และแก้ไขข้อมูลส่วนตัว">
-            <Avatar emoji={profile.emoji} photo={profile.avatarUrl} name={profile.name} />
-          </button>
-        }
-        title={`สวัสดี ${profile.name}`}
-        subtitle={greeting()}
-        right={
-          <span className="row" style={{ gap: 8 }}>
-            <button
-              className="btn ghost sm"
-              style={{ position: 'relative', padding: '9px 11px' }}
-              onClick={() => nav('notifications')}
-              aria-label="การแจ้งเตือน"
-            >
-              🔔
-              {unread > 0 && <span className="badge-dot">{unread}</span>}
-            </button>
-            <button
-              className="btn ghost sm"
-              style={{ padding: '9px 11px' }}
-              onClick={() => nav('settings')}
-              aria-label="ตั้งค่า"
-            >
-              ⚙️
-            </button>
-          </span>
-        }
-      />
-
-      {!cloud && (
-        <div className="card tight row" style={{ gap: 10, borderColor: 'rgba(255,196,77,.35)' }}>
-          <span>🧪</span>
-          <div className="grow tiny" style={{ lineHeight: 1.6 }}>
-            <b style={{ color: 'var(--warn)' }}>โหมดทดลอง</b> — ยังไม่ได้เชื่อมเซิร์ฟเวอร์
-            ข้อมูลอยู่ในเครื่องนี้เท่านั้น เพิ่มเพื่อนข้ามเครื่องและแชร์ตำแหน่งจริงยังใช้ไม่ได้
-          </div>
-        </div>
-      )}
-
-      <div className="card" style={{ background: 'linear-gradient(150deg, rgba(var(--accent-rgb), .16), var(--surface) 62%)' }}>
-        <div className="row">
-          <div className="grow">
-            <div className="row" style={{ gap: 8 }}>
-              <span className="chip on">เลเวล {lvl.level}</span>
-              <span className="chip">🪙 {profile.coins}</span>
-            </div>
-            <div className="small muted" style={{ marginTop: 10 }}>
-              เป้าหมายสัปดาห์นี้ {weekKm.toFixed(1)} / {profile.weeklyGoalKm} กม.
-            </div>
-            <div className="bar" style={{ marginTop: 6 }}>
-              <i style={{ width: `${goalPct}%` }} />
-            </div>
-          </div>
-        </div>
-        <div className="row" style={{ marginTop: 14, gap: 8 }}>
-          <button className="btn primary grow" onClick={() => nav('invites', { new: '1' })}>
-            📣 ชวนเพื่อนวิ่ง
-          </button>
-          <button className="btn grow" onClick={() => nav('run')}>
-            🏃 เริ่มวิ่งเลย
-          </button>
-        </div>
+  return <div className="home-screen">
+    <header className="home-header">
+      <button className="home-person" onClick={() => nav('profile')}><Avatar emoji={profile.emoji} photo={profile.avatarUrl} name={profile.name} /><span><small>สวัสดี {profile.name}</small><strong>ไปวิ่งกันไหมวันนี้?</strong></span></button>
+      <Button variant="ghost" size="icon" aria-label="การแจ้งเตือน" onClick={() => nav('notifications')}><Bell size={21} />{unread > 0 && <span className="badge-dot">{unread}</span>}</Button>
+      <Button variant="ghost" size="icon" aria-label="ตั้งค่า" onClick={() => nav('settings')}><Settings size={20} /></Button>
+    </header>
+    {!cloud && <p className="local-mode"><span />โหมดในเครื่อง · ข้อมูลบันทึกบนอุปกรณ์นี้</p>}
+    <Card className="distance-card"><CardContent>
+      <div className="distance-overview"><div><span className="eyebrow">ทุกก้าวมีความหมาย</span><p>ระยะทางรวม</p><strong>{total.toFixed(1)}</strong><span>กิโลเมตร</span></div>
+        <div className="weekly-chart"><div className="chart-bars" aria-hidden="true">{days.map((n, i) => <div key={i}><i style={{ height: n ? Math.max(8, n / max * 76) : 3 }} /><span>{labels[i]}</span></div>)}</div><p>สัปดาห์นี้ <b>{week.toFixed(1)} กม.</b></p>
+        <div className="sr-only"><table><caption>ระยะวิ่งสัปดาห์นี้ หน่วยกิโลเมตร</caption><tbody>{days.map((n, i) => <tr key={i}><th>{labels[i]}</th><td>{n.toFixed(2)}</td></tr>)}</tbody></table></div></div>
       </div>
-
-      <div className="section-title">สตรีคของคุณ</div>
-      <StreakCard streak={streak} onRun={() => nav('run')} />
-
-      <div className="section-title">
-        นัดวิ่งที่กำลังจะถึง
-        <span className="spacer" />
-        <button onClick={() => nav('invites')}>ดูทั้งหมด</button>
-      </div>
-
-      {upcoming.length === 0 ? (
-        <div className="card empty">
-          <div className="big">📭</div>
-          ยังไม่มีนัดวิ่ง — ชวนเพื่อนสักคนไหม?
-          <div style={{ marginTop: 14 }}>
-            <button className="btn primary sm" onClick={() => nav('invites', { new: '1' })}>
-              สร้างคำชวน
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="stack-12">
-          {upcoming.map((iv) => (
-            <InviteCard key={iv.id} invite={iv} friends={friends} compact onOpen={() => nav('invites')} />
-          ))}
-        </div>
-      )}
-
-      <div className="section-title">ทางลัด</div>
-      <div className="tiles">
-        <button className="tile" onClick={() => nav('friends')}>
-          {pending > 0 && <span className="flag">{pending} ใหม่</span>}
-          <span className="badge">👟</span>
-          <span className="t">เพื่อนนักวิ่ง</span>
-          <span className="v">{friends.filter((f) => f.status === 'friend').length} คน</span>
-          <span className="s">{online.length > 0 ? `${online.length} คนออนไลน์` : 'ในก๊วนของคุณ'}</span>
-        </button>
-
-        <button className="tile" onClick={() => nav('groups')}>
-          <span className="badge">👥</span>
-          <span className="t">กลุ่มวิ่ง</span>
-          <span className="v">{state.groups.length} กลุ่ม</span>
-          <span className="s">นัดทั้งก๊วนในคลิกเดียว</span>
-        </button>
-
-        <button className="tile" onClick={() => nav('map')}>
-          <span className="badge">🗺️</span>
-          <span className="t">แผนที่เพื่อน</span>
-          <span className="v">{sharing.length} คน</span>
-          <span className="s">{sharing.length > 0 ? 'กำลังแชร์ตำแหน่ง' : 'ยังไม่มีใครแชร์ตำแหน่ง'}</span>
-        </button>
-
-        <button className="tile" onClick={() => nav('games')}>
-          <span className="badge">🎯</span>
-          <span className="t">ภารกิจวันนี้</span>
-          <span className="v">
-            {doneToday}/{missions.length}
-          </span>
-          <span className="s">{doneToday === missions.length ? 'ครบแล้ววันนี้ 🎉' : 'เก็บ XP และเหรียญ'}</span>
-        </button>
-
-        <button className="tile wide" onClick={() => nav('profile', { section: 'runs' })}>
-          <span className="badge">🏁</span>
-          <span className="grow">
-            <span className="t" style={{ display: 'block' }}>
-              ประวัติการวิ่ง
-            </span>
-            <span className="s" style={{ display: 'block', marginTop: 3 }}>
-              {lastRun
-                ? `${runs.length} ครั้ง · ล่าสุด ${formatKm(lastRun.distanceM)} กม. ${formatDuration(lastRun.movingMs)} · ${agoLabel(lastRun.startedAt)}`
-                : 'ยังไม่มีกิจกรรม — ออกไปวิ่งครั้งแรกกันเถอะ'}
-            </span>
-          </span>
-          <span className="muted">›</span>
-        </button>
-      </div>
-
-      {runs.length > 0 && (
-        <>
-          <div className="section-title">
-            สถิติของคุณ
-            <span className="spacer" />
-            <button onClick={() => nav('profile')}>โปรไฟล์</button>
-          </div>
-          <div className="card">
-            <div className="stat-grid">
-              <div className="stat">
-                <div className="v">{(runs.reduce((s, r) => s + r.distanceM, 0) / 1000).toFixed(1)}</div>
-                <div className="k">กม. สะสม</div>
-              </div>
-              <div className="stat">
-                <div className="v">{runs.length}</div>
-                <div className="k">ครั้งที่วิ่ง</div>
-              </div>
-              <div className="stat">
-                <div className="v">{profile.xp}</div>
-                <div className="k">XP</div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </>
-  )
-}
-
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 5) return 'ดึกแล้ว พักผ่อนบ้างนะ 🌙'
-  if (h < 11) return 'อากาศกำลังดี ออกไปวิ่งกันเถอะ ☀️'
-  if (h < 16) return 'เที่ยงแดดแรง ดื่มน้ำเยอะ ๆ นะ 💧'
-  if (h < 20) return 'เย็นนี้ชวนเพื่อนวิ่งไหม? 🌆'
-  return 'ค่ำแล้ว วิ่งเบา ๆ ก็ดีนะ 🌃'
+      <div className="weekly-goal"><span>เป้าหมาย {profile.weeklyGoalKm} กม. / สัปดาห์</span><span>{Math.round(week / Math.max(1, profile.weeklyGoalKm) * 100)}%</span></div>
+      <progress value={Math.min(week, profile.weeklyGoalKm)} max={Math.max(1, profile.weeklyGoalKm)} aria-label="ความคืบหน้าเป้าหมายรายสัปดาห์" />
+    </CardContent></Card>
+    <div className="home-shortcuts">
+      {[{ icon: Plus, text: 'ชวนวิ่ง', go: () => nav('invites', { new: '1' }) }, { icon: CalendarDays, text: 'นัดวิ่ง', go: () => nav('invites') }, { icon: MapPin, text: 'แผนที่', go: () => nav('map') }, { icon: Users, text: 'ก๊วนวิ่ง', go: () => nav('groups') }].map(({ icon: Icon, text, go }) => <button key={text} onClick={go}><span><Icon size={23} strokeWidth={1.8} /></span>{text}</button>)}
+    </div>
+    <div className="section-title">นัดวิ่งของเรา<button onClick={() => nav('invites')}>ดูทั้งหมด <ArrowRight size={15} /></button></div>
+    {upcoming.length ? <div className="stack-12">{upcoming.map(invite => <InviteCard key={invite.id} invite={invite} friends={friends} compact onOpen={() => nav('invites')} />)}</div> :
+      <Card className="first-run-card"><div className="first-run-photo" role="img" aria-label="นักวิ่งกลางแจ้ง" /><CardContent><span className="eyebrow">เริ่มต้นไปด้วยกัน</span><h2>นัดแรก ก้าวแรก ของก๊วนเรา</h2><p>เลือกสถานที่ดี ๆ แล้วชวนเพื่อนออกไปวิ่ง</p><Button onClick={() => nav('invites', { new: '1' })}><Plus size={18} />สร้างนัดวิ่ง</Button></CardContent></Card>}
+    <div className="section-title">เพื่อนนักวิ่ง<button onClick={() => nav('friends')}>ดูก๊วน <ArrowRight size={15} /></button></div>
+    <Card><CardContent>{connected.length ? <div className="friend-preview">{connected.slice(0, 3).map(f => <button key={f.id} onClick={() => nav('friends')}><Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} /><span><strong>{f.name}</strong><small>{isOnline(f, now) ? 'ออนไลน์ · พร้อมไปด้วยกัน' : 'เพื่อนร่วมทางของคุณ'}</small></span><span className={isOnline(f, now) ? 'online-dot' : 'offline-dot'} /></button>)}</div> : <div className="friend-empty"><span className="soft-icon"><Users size={25} /></span><div><strong>วิ่งคนเดียวก็ดี มีเพื่อนยิ่งสนุก</strong><p>เพิ่มเพื่อนด้วยรหัสหรือสแกน QR</p></div><Button variant="ghost" size="icon" aria-label="เพิ่มเพื่อน" onClick={() => nav('friends')}><Plus size={22} /></Button></div>}</CardContent></Card>
+    <div className="section-title">ก้าวเล็ก ๆ ที่สม่ำเสมอ<button onClick={() => nav('games')}>ภารกิจ <Flag size={18} /></button></div><StreakCard streak={streak} onRun={() => nav('run')} />
+    <Button className="home-start" onClick={() => nav('run')}><Footprints size={20} />ออกไปวิ่งกัน<ArrowRight size={18} /></Button>
+    <p className="home-caption">{online.length ? online.length + ' คนในก๊วนกำลังออนไลน์' : 'มากกว่าการวิ่ง คือการได้ไปด้วยกัน'}</p>
+  </div>
 }

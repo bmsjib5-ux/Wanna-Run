@@ -1,13 +1,13 @@
 {
-  "name": "Wanna Run? — ชวนเพื่อนวิ่ง",
-  "short_name": "Wanna Run?",
+  "name": "ไปวิ่งไหม — วิ่งด้วยกัน ไปได้ไกลกว่าเดิม",
+  "short_name": "ไปวิ่งไหม",
   "description": "ชวนเพื่อนวิ่ง สร้างก๊วน นัดสถานที่ แชร์ตำแหน่ง จับระยะทาง และเก็บภารกิจไปด้วยกัน",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b0f14",
-  "theme_color": "#0b0f14",
+  "background_color": "#f7f9f8",
+  "theme_color": "#197557",
   "lang": "th",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

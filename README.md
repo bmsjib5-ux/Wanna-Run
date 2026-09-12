@@ -220,3 +220,7 @@ src/
 
 React 19 · TypeScript · Vite · Leaflet (แผนที่ OpenStreetMap/CARTO) · Geolocation API ·
 Notification API · Web Share API · Service Worker
+# การปรับหน้าตาไปวิ่งไหม
+
+ดู [แนวทาง NativeShad ที่นำมาปรับใช้และผลการตรวจสอบ](docs/native-design.md)
+สำหรับคอมโพเนนต์ใหม่ ธีมเขียว–ขาว และหน้าจอที่อัปเดตตามภาพอ้างอิง

@@ -16,6 +16,35 @@ export default function Sheet({ open, title, subtitle, onClose, children }: Prop
 
   useEffect(() => {
     if (!open) return
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const el = ref.current
+    if (!el) return
+    const focusable = () => Array.from(el.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
+    )).filter(node => node.getClientRects().length > 0)
+    ;(focusable()[0] ?? el).focus()
+    const trap = (event: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('[role="dialog"]')
+      if (event.key !== 'Tab' || dialogs[dialogs.length - 1] !== el) return
+      const nodes = focusable()
+      const first = nodes[0]
+      const last = nodes[nodes.length - 1]
+      if (!first) { event.preventDefault(); el.focus(); return }
+      if (event.shiftKey && (document.activeElement === first || !el.contains(document.activeElement))) {
+        event.preventDefault(); last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !el.contains(document.activeElement))) {
+        event.preventDefault(); first.focus()
+      }
+    }
+    document.addEventListener('keydown', trap)
+    return () => {
+      document.removeEventListener('keydown', trap)
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
@@ -80,7 +109,7 @@ export default function Sheet({ open, title, subtitle, onClose, children }: Prop
   if (!open) return null
   return (
     <div className="sheet-backdrop" onClick={onClose} role="presentation">
-      <div ref={ref} className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={ref} className="sheet" tabIndex={-1} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
         <div className="sheet-grip" />
         <div className="sheet-head">
           <div className="grow">

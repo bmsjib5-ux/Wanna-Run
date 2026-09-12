@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Brand from '../components/Brand'
 import { useStore } from '../state/store'
 import { requestNotificationPermission } from '../lib/notify'
 import AvatarPicker from '../components/AvatarPicker'
@@ -26,17 +27,16 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell onboarding-screen ${step === 0 ? 'welcome-screen' : ''}`}>
       <div className="page" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 40px)', paddingBottom: 40 }}>
         {step === 0 && (
           <div className="col" style={{ gap: 18, minHeight: '76dvh', justifyContent: 'center' }}>
             <div className="center">
-              <div style={{ fontSize: 74, lineHeight: 1 }}>🏃‍♀️💨</div>
-              <h1 style={{ fontSize: 34, margin: '18px 0 6px', letterSpacing: -1 }}>Wanna Run?</h1>
+              <Brand tagline={false} />
               <p className="muted" style={{ margin: 0, lineHeight: 1.7 }}>
-                ชวนเพื่อนออกไปวิ่งด้วยกัน นัดสถานที่ แชร์ตำแหน่ง
+                วิ่งด้วยกัน
                 <br />
-                จับระยะทาง เก็บภารกิจ และเล่นมินิเกมระหว่างทาง
+                ไปได้ไกลกว่าเดิม
               </p>
             </div>
 
