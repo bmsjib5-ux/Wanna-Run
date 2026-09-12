@@ -5,13 +5,11 @@ import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import Avatar from '../components/Avatar'
 import AvatarPicker from '../components/AvatarPicker'
-import ThemePicker from '../components/ThemePicker'
 import AboutBuild from '../components/AboutBuild'
 import { levelOf, useStore } from '../state/store'
 import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { shortDate, startOfWeek, whenLabel } from '../lib/format'
-import { notificationPermission, requestNotificationPermission } from '../lib/notify'
 import { nameHint, useNameCheck } from '../lib/useNameCheck'
 import type { RunSession } from '../types'
 
@@ -29,7 +27,6 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
   const [editing, setEditing] = useState(false)
   const [detail, setDetail] = useState<RunSession | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
-  const [perm, setPerm] = useState(notificationPermission())
   // แก้ชื่อในสถานะชั่วคราวก่อน แล้วค่อยบันทึกทีเดียว
   // ของเดิมยิงอัปเดตขึ้นเซิร์ฟเวอร์ทุกตัวอักษรที่พิมพ์
   const [draftName, setDraftName] = useState(profile.name)
@@ -144,30 +141,6 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
         </div>
       </div>
 
-      <div className="section-title">การแจ้งเตือน</div>
-      <div className="card tight row">
-        <span className="avatar sm">🔔</span>
-        <div className="grow">
-          <div className="strong" style={{ fontSize: 14 }}>
-            แจ้งเตือนจากระบบ
-          </div>
-          <div className="muted tiny">
-            {perm === 'granted'
-              ? 'เปิดอยู่ — จะเตือนเมื่อเพื่อนชวนวิ่งหรือตอบรับนัด'
-              : perm === 'denied'
-                ? 'ถูกปฏิเสธ ต้องเปิดสิทธิ์ในตั้งค่าเบราว์เซอร์'
-                : perm === 'unsupported'
-                  ? 'เบราว์เซอร์นี้ไม่รองรับ แต่ยังเห็นแจ้งเตือนในแอปได้'
-                  : 'ยังไม่ได้เปิด'}
-          </div>
-        </div>
-        {perm !== 'granted' && perm !== 'unsupported' && (
-          <button className="btn primary xs" onClick={async () => setPerm(await requestNotificationPermission())}>
-            เปิด
-          </button>
-        )}
-      </div>
-
       <div className="section-title" ref={runsRef} style={{ scrollMarginTop: 12 }}>
         ประวัติการวิ่ง ({runs.length})
       </div>
@@ -202,7 +175,16 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
       )}
 
       <div className="section-title">ตั้งค่า</div>
-      <ThemePicker />
+      <button className="list-btn" onClick={() => nav('settings')}>
+        <span className="avatar">⚙️</span>
+        <span className="grow">
+          <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+            การแจ้งเตือนและธีมของแอป
+          </span>
+          <span className="muted small">เปิดแจ้งเตือน เลือกโหมดมืด/สว่าง สีหลัก และรูปพื้นหลัง</span>
+        </span>
+        <span className="muted">›</span>
+      </button>
       <AboutBuild />
       <div className="stack-8" style={{ marginTop: 12 }}>
         {cloud && <SignOutButton />}

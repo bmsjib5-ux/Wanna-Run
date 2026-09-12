@@ -57,15 +57,25 @@ export default function Home({ nav }: { nav: Nav }) {
         title={`สวัสดี ${profile.name}`}
         subtitle={greeting()}
         right={
-          <button
-            className="btn ghost sm"
-            style={{ position: 'relative', padding: '9px 11px' }}
-            onClick={() => nav('notifications')}
-            aria-label="การแจ้งเตือน"
-          >
-            🔔
-            {unread > 0 && <span className="badge-dot">{unread}</span>}
-          </button>
+          <span className="row" style={{ gap: 8 }}>
+            <button
+              className="btn ghost sm"
+              style={{ position: 'relative', padding: '9px 11px' }}
+              onClick={() => nav('notifications')}
+              aria-label="การแจ้งเตือน"
+            >
+              🔔
+              {unread > 0 && <span className="badge-dot">{unread}</span>}
+            </button>
+            <button
+              className="btn ghost sm"
+              style={{ padding: '9px 11px' }}
+              onClick={() => nav('settings')}
+              aria-label="ตั้งค่า"
+            >
+              ⚙️
+            </button>
+          </span>
         }
       />
 

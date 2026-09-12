@@ -19,6 +19,7 @@ import LiveMap from './screens/LiveMap'
 import Games from './screens/Games'
 import Profile from './screens/Profile'
 import Notifications from './screens/Notifications'
+import Settings from './screens/Settings'
 
 export type Route =
   | 'home'
@@ -30,6 +31,7 @@ export type Route =
   | 'games'
   | 'profile'
   | 'notifications'
+  | 'settings'
 
 export type Nav = (route: Route, params?: Record<string, string>) => void
 
@@ -126,6 +128,7 @@ function Shell() {
         {route === 'games' && <Games nav={nav} tab={params.tab} />}
         {route === 'profile' && <Profile nav={nav} section={params.section === 'runs' ? 'runs' : undefined} />}
         {route === 'notifications' && <Notifications nav={nav} />}
+        {route === 'settings' && <Settings nav={nav} />}
       </main>
 
       <nav className="nav">
