@@ -16,12 +16,19 @@
       // ตั้งธีมที่ผู้ใช้เลือกไว้ตั้งแต่ก่อนโหลดแอป ไม่งั้นหน้าจะกะพริบจากธีมเริ่มต้นไปธีมที่เลือก
       try {
         var t = JSON.parse(localStorage.getItem('wanna-run.theme') || '{}');
-        var mode = t.mode === 'system'
-          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : (t.mode === 'light' ? 'light' : 'dark');
-        document.documentElement.dataset.theme = mode;
-        if (t.accent) document.documentElement.dataset.accent = t.accent;
-        if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#f3f6fa';
+        var bars = { neon: '#05070a', mono: '#fafafa', pastel: '#fdf7f4', glass: '#080e1c', sunset: '#140f0e' };
+        if (t.preset && bars[t.preset]) {
+          // สไตล์สำเร็จรูปกำหนดสีมาครบชุด จึงไม่ต้องตั้ง data-theme/data-accent
+          document.documentElement.dataset.preset = t.preset;
+          document.querySelector('meta[name="theme-color"]').content = bars[t.preset];
+        } else {
+          var mode = t.mode === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : (t.mode === 'light' ? 'light' : 'dark');
+          document.documentElement.dataset.theme = mode;
+          if (t.accent) document.documentElement.dataset.accent = t.accent;
+          if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#f3f6fa';
+        }
       } catch (e) {}
     </script>
     <meta name="mobile-web-app-capable" content="yes" />

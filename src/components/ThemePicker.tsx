@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ACCENTS, MODES, useTheme } from '../lib/theme'
+import { ACCENTS, MODES, PRESETS, useTheme } from '../lib/theme'
 import { DIMS, useBackground } from '../lib/background'
 import { pushNotice } from '../lib/notify'
 
@@ -32,6 +32,47 @@ export default function ThemePicker() {
         เก็บไว้ในเครื่องนี้ ไม่กระทบเพื่อนหรือเครื่องอื่น
       </div>
 
+      <div className="field" style={{ marginTop: 14, marginBottom: 14 }}>
+        <span>สไตล์สำเร็จรูป</span>
+        <div className="styles" role="radiogroup" aria-label="สไตล์ของแอป">
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              role="radio"
+              aria-checked={theme.preset === p.key}
+              className={`style-pick${theme.preset === p.key ? ' on' : ''}`}
+              onClick={() => setTheme({ preset: p.key })}
+            >
+              {/* ตัวอย่างย่อใช้จานสีของสไตล์นั้นจริง ๆ ผ่านคลาส .p-* */}
+              <span className={`style-demo${p.key === 'custom' ? '' : ` p-${p.key}`}`}>
+                <span className="d-bar">
+                  <span className="d-dot" />
+                  <span className="d-line" />
+                </span>
+                <span className="d-card">
+                  <span className="d-line" />
+                  <span className="d-btn" />
+                </span>
+                <span className="d-row">
+                  <span className="d-sq hot" />
+                  <span className="d-sq" />
+                  <span className="d-sq" />
+                </span>
+              </span>
+              <span className="style-name">
+                {p.label}
+                {theme.preset === p.key && <span className="tick">✓</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="muted tiny" style={{ marginTop: 8 }}>
+          {PRESETS.find((p) => p.key === theme.preset)?.detail}
+        </div>
+      </div>
+
+      {theme.preset === 'custom' && (
+        <>
       <div className="field" style={{ marginTop: 14, marginBottom: 14 }}>
         <span>โหมด</span>
         <div className="seg" role="radiogroup" aria-label="โหมดสี">
@@ -71,6 +112,8 @@ export default function ThemePicker() {
           {ACCENTS.find((a) => a.key === theme.accent)?.label}
         </div>
       </div>
+        </>
+      )}
 
       <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
         <span>รูปพื้นหลัง</span>

@@ -2,8 +2,20 @@ import { useCallback, useEffect, useState } from 'react'
 
 export type ThemeMode = 'dark' | 'light' | 'system'
 export type Accent = 'lime' | 'sky' | 'coral' | 'violet' | 'rose' | 'mint'
+/** สไตล์สำเร็จรูป — 'custom' คือเลือกโหมดและสีหลักเอง */
+export type Preset = 'custom' | 'neon' | 'mono' | 'pastel' | 'glass' | 'sunset'
 
-export type ThemeSettings = { mode: ThemeMode; accent: Accent }
+export type ThemeSettings = { mode: ThemeMode; accent: Accent; preset: Preset }
+
+/** สไตล์สำเร็จรูปพร้อมสีแถบสถานะของแต่ละแบบ */
+export const PRESETS: Array<{ key: Preset; label: string; detail: string; bar: string }> = [
+  { key: 'custom', label: 'ปรับเอง', detail: 'เลือกโหมดและสีหลักด้านล่าง', bar: '#0b0f14' },
+  { key: 'neon', label: 'Neon Sport', detail: 'ดำสนิท สีสะท้อนแสง', bar: '#05070a' },
+  { key: 'mono', label: 'Minimal', detail: 'ขาวสะอาด เรียบ ๆ', bar: '#fafafa' },
+  { key: 'pastel', label: 'Pastel', detail: 'โทนนุ่ม มุมโค้งมน', bar: '#fdf7f4' },
+  { key: 'glass', label: 'Midnight', detail: 'กระจกเบลอ น้ำเงินเข้ม', bar: '#080e1c' },
+  { key: 'sunset', label: 'Sunset', detail: 'อบอุ่น ส้ม-เหลือง', bar: '#140f0e' },
+]
 
 export const ACCENTS: Array<{ key: Accent; label: string; swatch: string }> = [
   { key: 'lime', label: 'เขียวมะนาว', swatch: '#c6f24e' },
@@ -22,7 +34,7 @@ export const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
 
 /** คีย์เดียวกับที่สคริปต์ใน index.html อ่านตอนเปิดหน้า เพื่อไม่ให้ธีมกะพริบ */
 export const THEME_KEY = 'wanna-run.theme'
-const DEFAULTS: ThemeSettings = { mode: 'dark', accent: 'lime' }
+const DEFAULTS: ThemeSettings = { mode: 'dark', accent: 'lime', preset: 'custom' }
 
 /** สีแถบสถานะของเบราว์เซอร์ ให้กลืนกับพื้นแอปแต่ละธีม */
 const BAR_COLOR: Record<'dark' | 'light', string> = { dark: '#0b0f14', light: '#f3f6fa' }
@@ -35,6 +47,7 @@ export function loadTheme(): ThemeSettings {
     return {
       mode: MODES.some((m) => m.key === parsed.mode) ? (parsed.mode as ThemeMode) : DEFAULTS.mode,
       accent: ACCENTS.some((a) => a.key === parsed.accent) ? (parsed.accent as Accent) : DEFAULTS.accent,
+      preset: PRESETS.some((p) => p.key === parsed.preset) ? (parsed.preset as Preset) : DEFAULTS.preset,
     }
   } catch {
     return DEFAULTS
@@ -50,13 +63,28 @@ export function resolveMode(mode: ThemeMode): 'dark' | 'light' {
   return mode
 }
 
-/** เขียน data-theme / data-accent ลงบน <html> และอัปเดตสีแถบสถานะ */
+/**
+ * เขียนค่าธีมลงบน <html> และอัปเดตสีแถบสถานะ
+ *
+ * สไตล์สำเร็จรูปกำหนดจานสีมาครบชุดแล้ว จึงถอด data-theme/data-accent ออก
+ * เพื่อไม่ให้สองระบบแย่งกันกำหนดสีเดียวกัน
+ */
 export function applyTheme(settings: ThemeSettings): void {
-  const resolved = resolveMode(settings.mode)
   const root = document.documentElement
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+
+  if (settings.preset !== 'custom') {
+    root.dataset.preset = settings.preset
+    delete root.dataset.theme
+    delete root.dataset.accent
+    if (meta) meta.content = PRESETS.find((p) => p.key === settings.preset)?.bar ?? BAR_COLOR.dark
+    return
+  }
+
+  const resolved = resolveMode(settings.mode)
+  delete root.dataset.preset
   root.dataset.theme = resolved
   root.dataset.accent = settings.accent
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   if (meta) meta.content = BAR_COLOR[resolved]
 }
 
@@ -79,7 +107,7 @@ export function useTheme(): [ThemeSettings, (patch: Partial<ThemeSettings>) => v
 
   // โหมด "ตามเครื่อง" ต้องตามเมื่อระบบสลับกลางคัน เช่น ตกเย็นแล้วมือถือเปลี่ยนเป็นมืดเอง
   useEffect(() => {
-    if (settings.mode !== 'system' || typeof matchMedia !== 'function') return
+    if (settings.preset !== 'custom' || settings.mode !== 'system' || typeof matchMedia !== 'function') return
     const mq = matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => applyTheme(settings)
     mq.addEventListener('change', onChange)
