@@ -29,7 +29,8 @@ body { user-select: text; -webkit-user-select: text; }
 .seg { background: var(--surface-2); border: 0; border-radius: 999px; }
 .seg button { min-height: 44px; border-radius: 999px; }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
-.topbar { padding-block: 13px; }
+/* Keep header controls below the status bar / camera in edge-to-edge PWAs. */
+.topbar { padding-block: calc(env(safe-area-inset-top, 0px) + 13px) 13px; }
 .topbar h1 { font-size: 1.3rem; }
 .nav { min-height: 78px; padding-top: 8px; border-radius: 22px 22px 0 0; box-shadow: 0 -5px 24px #172d2708; }
 .nav button { min-height: 54px; gap: 5px; font-size: .65rem; }
@@ -75,7 +76,7 @@ body { user-select: text; -webkit-user-select: text; }
 .signin-form > .ui-button { width: 100%; border-radius: 999px; }
 .signin-switch { border-top: 1px solid var(--line); margin-top: 27px; padding-top: 17px; text-align: center; font-size: .8rem; }
 .signin-footer { text-align: center; font-size: .72rem; color: var(--muted); margin-top: 25px; }
-.home-header { display: flex; align-items: center; gap: 3px; padding-block: 16px 10px; }
+.home-header { display: flex; align-items: center; gap: 3px; padding-block: calc(env(safe-area-inset-top, 0px) + 16px) 10px; }
 .home-person { display: flex; align-items: center; gap: 11px; text-align: start; margin-right: auto; min-width: 0; }
 .home-person > span { display: grid; gap: 2px; min-width: 0; }
 .home-person small { font-size: .73rem; color: var(--muted); }
