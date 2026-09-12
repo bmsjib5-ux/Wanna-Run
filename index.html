@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>Wanna Run? — ชวนเพื่อนวิ่ง</title>
+    <title>ไปวิ่งไหม — วิ่งด้วยกัน ไปได้ไกลกว่าเดิม</title>
     <meta
       name="description"
       content="ชวนเพื่อนวิ่ง สร้างก๊วน นัดสถานที่ แชร์ตำแหน่งแบบสด จับระยะทางด้วย GPS พร้อมภารกิจและมินิเกม"
@@ -24,9 +24,9 @@
         } else {
           var mode = t.mode === 'system'
             ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : (t.mode === 'light' ? 'light' : 'dark');
+            : (t.mode === 'dark' ? 'dark' : 'light');
           document.documentElement.dataset.theme = mode;
-          if (t.accent) document.documentElement.dataset.accent = t.accent;
+          document.documentElement.dataset.accent = t.accent || 'mint';
           if (mode === 'light') document.querySelector('meta[name="theme-color"]').content = '#f3f6fa';
         }
       } catch (e) {}
@@ -34,7 +34,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Wanna Run?" />
+    <meta name="apple-mobile-web-app-title" content="ไปวิ่งไหม" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
