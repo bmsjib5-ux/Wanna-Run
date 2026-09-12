@@ -7,6 +7,8 @@ import { levelOf, missionsWithProgress, useStore } from '../state/store'
 import { agoLabel, startOfWeek } from '../lib/format'
 import { formatDuration, formatKm } from '../lib/geo'
 import { isOnline, useNow } from '../lib/presence'
+import { computeStreak } from '../lib/streak'
+import StreakCard from '../components/StreakCard'
 
 export default function Home({ nav }: { nav: Nav }) {
   const { state, cloud } = useStore()
@@ -40,6 +42,7 @@ export default function Home({ nav }: { nav: Nav }) {
   const sharing = friends.filter((f) => f.status === 'friend' && f.sharingLocation)
   const pending = friends.filter((f) => f.status === 'incoming').length
   const lastRun = state.runs[0]
+  const streak = useMemo(() => computeStreak(runs), [runs])
 
   const goalPct = Math.min(100, (weekKm / Math.max(1, profile.weeklyGoalKm)) * 100)
 
@@ -101,6 +104,9 @@ export default function Home({ nav }: { nav: Nav }) {
         </div>
       </div>
 
+      <div className="section-title">สตรีคของคุณ</div>
+      <StreakCard streak={streak} onRun={() => nav('run')} />
+
       <div className="section-title">
         นัดวิ่งที่กำลังจะถึง
         <span className="spacer" />
@@ -126,71 +132,48 @@ export default function Home({ nav }: { nav: Nav }) {
       )}
 
       <div className="section-title">ทางลัด</div>
-      <div className="stack-8">
-        <button className="list-btn" onClick={() => nav('friends')}>
-          <span className="avatar">👟</span>
-          <span className="grow">
-            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
-              เพื่อนนักวิ่ง
-            </span>
-            <span className="muted small">
-              {friends.filter((f) => f.status === 'friend').length} คนในก๊วนของคุณ
-              {pending > 0 ? ` · ${pending} คำขอใหม่` : ''}
-            </span>
-          </span>
-          {pending > 0 && <span className="chip bad">{pending}</span>}
-          <span className="muted">›</span>
+      <div className="tiles">
+        <button className="tile" onClick={() => nav('friends')}>
+          {pending > 0 && <span className="flag">{pending} ใหม่</span>}
+          <span className="badge">👟</span>
+          <span className="t">เพื่อนนักวิ่ง</span>
+          <span className="v">{friends.filter((f) => f.status === 'friend').length} คน</span>
+          <span className="s">{online.length > 0 ? `${online.length} คนออนไลน์` : 'ในก๊วนของคุณ'}</span>
         </button>
 
-        <button className="list-btn" onClick={() => nav('groups')}>
-          <span className="avatar">👥</span>
-          <span className="grow">
-            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
-              กลุ่มวิ่ง
-            </span>
-            <span className="muted small">{state.groups.length} กลุ่ม · นัดทั้งก๊วนได้ในคลิกเดียว</span>
-          </span>
-          <span className="muted">›</span>
+        <button className="tile" onClick={() => nav('groups')}>
+          <span className="badge">👥</span>
+          <span className="t">กลุ่มวิ่ง</span>
+          <span className="v">{state.groups.length} กลุ่ม</span>
+          <span className="s">นัดทั้งก๊วนในคลิกเดียว</span>
         </button>
 
-        <button className="list-btn" onClick={() => nav('profile', { section: 'runs' })}>
-          <span className="avatar">🏁</span>
+        <button className="tile" onClick={() => nav('map')}>
+          <span className="badge">🗺️</span>
+          <span className="t">แผนที่เพื่อน</span>
+          <span className="v">{sharing.length} คน</span>
+          <span className="s">{sharing.length > 0 ? 'กำลังแชร์ตำแหน่ง' : 'ยังไม่มีใครแชร์ตำแหน่ง'}</span>
+        </button>
+
+        <button className="tile" onClick={() => nav('games')}>
+          <span className="badge">🎯</span>
+          <span className="t">ภารกิจวันนี้</span>
+          <span className="v">
+            {doneToday}/{missions.length}
+          </span>
+          <span className="s">{doneToday === missions.length ? 'ครบแล้ววันนี้ 🎉' : 'เก็บ XP และเหรียญ'}</span>
+        </button>
+
+        <button className="tile wide" onClick={() => nav('profile', { section: 'runs' })}>
+          <span className="badge">🏁</span>
           <span className="grow">
-            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+            <span className="t" style={{ display: 'block' }}>
               ประวัติการวิ่ง
             </span>
-            <span className="muted small">
+            <span className="s" style={{ display: 'block', marginTop: 3 }}>
               {lastRun
-                ? `${state.runs.length} ครั้ง · ล่าสุด ${formatKm(lastRun.distanceM)} กม. ${formatDuration(lastRun.movingMs)} · ${agoLabel(lastRun.startedAt)}`
+                ? `${runs.length} ครั้ง · ล่าสุด ${formatKm(lastRun.distanceM)} กม. ${formatDuration(lastRun.movingMs)} · ${agoLabel(lastRun.startedAt)}`
                 : 'ยังไม่มีกิจกรรม — ออกไปวิ่งครั้งแรกกันเถอะ'}
-            </span>
-          </span>
-          <span className="muted">›</span>
-        </button>
-
-        <button className="list-btn" onClick={() => nav('map')}>
-          <span className="avatar">🗺️</span>
-          <span className="grow">
-            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
-              แผนที่เพื่อน
-            </span>
-            <span className="muted small">
-              {online.length > 0
-                ? `${online.length} คนออนไลน์${sharing.length > 0 ? ` · ${sharing.length} คนแชร์ตำแหน่ง` : ''}`
-                : 'ยังไม่มีเพื่อนออนไลน์ตอนนี้'}
-            </span>
-          </span>
-          <span className="muted">›</span>
-        </button>
-
-        <button className="list-btn" onClick={() => nav('games')}>
-          <span className="avatar">🎯</span>
-          <span className="grow">
-            <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
-              ภารกิจวันนี้
-            </span>
-            <span className="muted small">
-              สำเร็จ {doneToday}/{missions.length} ภารกิจ
             </span>
           </span>
           <span className="muted">›</span>
