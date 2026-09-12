@@ -71,7 +71,17 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
         onBack={tracker.running ? undefined : () => nav('home')}
       />
 
-      <div className="card">
+      <div className="run-map-stage">
+        <Map
+          center={center}
+          zoom={16}
+          fit={fit}
+          track={tracker.path}
+          pins={[{ id: 'me', pos: center, emoji: state.profile.emoji, label: 'คุณ', me: true }]}
+        />
+        <span className="run-map-label">{tracker.running ? 'เส้นทางของคุณ' : 'จุดเริ่มต้นของคุณ'}</span>
+      </div>
+      <div className="card run-dashboard">
         <div className="run-hero">
           <div className="dist">{formatKm(tracker.distanceM)}</div>
           <div className="unit">กิโลเมตร</div>
@@ -176,15 +186,6 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
           </div>
         )}
       </div>
-
-      <div className="section-title">เส้นทาง</div>
-      <Map
-        center={center}
-        zoom={16}
-        fit={fit}
-        track={tracker.path}
-        pins={[{ id: 'me', pos: center, emoji: state.profile.emoji, label: 'คุณ', me: true }]}
-      />
 
       {!tracker.running && (
         <>

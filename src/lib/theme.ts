@@ -34,7 +34,7 @@ export const MODES: Array<{ key: ThemeMode; label: string; icon: string }> = [
 
 /** คีย์เดียวกับที่สคริปต์ใน index.html อ่านตอนเปิดหน้า เพื่อไม่ให้ธีมกะพริบ */
 export const THEME_KEY = 'wanna-run.theme'
-const DEFAULTS: ThemeSettings = { mode: 'dark', accent: 'lime', preset: 'custom' }
+const DEFAULTS: ThemeSettings = { mode: 'light', accent: 'mint', preset: 'custom' }
 
 /** สีแถบสถานะของเบราว์เซอร์ ให้กลืนกับพื้นแอปแต่ละธีม */
 const BAR_COLOR: Record<'dark' | 'light', string> = { dark: '#0b0f14', light: '#f3f6fa' }
