@@ -1,6 +1,7 @@
 import type { Friend, RunInvite } from '../types'
 import { whenLabel } from '../lib/format'
 import Avatar from './Avatar'
+import { ArrowUpRight, MapPin, CalendarDays } from 'lucide-react'
 
 type Props = {
   invite: RunInvite
@@ -22,22 +23,22 @@ export default function InviteCard({ invite, friends, compact, onOpen, children 
   const soon = invite.startAt - Date.now() < 24 * 3600_000 && invite.startAt > Date.now()
 
   return (
-    <div className="card" onClick={onOpen} style={{ cursor: onOpen ? 'pointer' : undefined }}>
+    <div className="card invite-design-card">
+      <div className="invite-cover" aria-hidden="true"><span>{invite.targetKm} KM</span></div>
       <div className="row" style={{ alignItems: 'flex-start' }}>
-        <div className="avatar">{invite.hostIsMe ? '📣' : '📨'}</div>
         <div className="grow">
           <div className="row" style={{ gap: 6 }}>
             <div className="strong truncate" style={{ fontSize: 15 }}>
-              {invite.title}
+              {onOpen ? <button className="invite-title" onClick={onOpen}>{invite.title}<ArrowUpRight size={17} /></button> : invite.title}
             </div>
             {invite.status === 'cancelled' && <span className="chip bad">ยกเลิกแล้ว</span>}
             {invite.status === 'open' && soon && <span className="chip warn">ใกล้ถึงเวลา</span>}
           </div>
           <div className="muted small" style={{ marginTop: 3 }}>
-            📍 {invite.place.name}
+            <MapPin size={14} aria-hidden="true" /> {invite.place.name}
           </div>
           <div className="muted small">
-            🗓️ {whenLabel(invite.startAt)} · 🎯 {invite.targetKm} กม.
+            <CalendarDays size={14} aria-hidden="true" /> {whenLabel(invite.startAt)} · {invite.targetKm} กม.
           </div>
         </div>
       </div>

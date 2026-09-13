@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { House, CalendarDays, Footprints, Users, UserRound } from 'lucide-react'
 import { StoreProvider, useStore } from './state/store'
 import { RunProvider, useRun } from './state/run'
 import { formatDuration, formatKm } from './lib/geo'
@@ -35,13 +36,13 @@ export type Route =
 
 export type Nav = (route: Route, params?: Record<string, string>) => void
 
-const TABS: Array<{ key: Route; label: string; icon: string }> = [
-  { key: 'home', label: 'หน้าหลัก', icon: '🏠' },
-  { key: 'friends', label: 'เพื่อน', icon: '👟' },
-  { key: 'run', label: 'วิ่ง', icon: '🏃' },
-  { key: 'map', label: 'แผนที่', icon: '🗺️' },
-  { key: 'games', label: 'ภารกิจ', icon: '🎮' },
-]
+const TABS = [
+  { key: 'home', label: 'หน้าหลัก', icon: House },
+  { key: 'invites', label: 'นัดวิ่ง', icon: CalendarDays },
+  { key: 'run', label: 'เริ่มวิ่ง', icon: Footprints },
+  { key: 'friends', label: 'ก๊วนวิ่ง', icon: Users },
+  { key: 'profile', label: 'โปรไฟล์', icon: UserRound },
+] as const
 
 function Shell() {
   const { state, syncing } = useStore()
@@ -92,7 +93,7 @@ function Shell() {
           <span>กลับไปหน้าวิ่ง ›</span>
         </button>
       )}
-      <main className="page">
+      <main className={`page route-${route}`}>
         {route === 'home' && <Home nav={nav} />}
         {route === 'friends' && <Friends nav={nav} addCode={params.add} />}
         {route === 'groups' && <Groups nav={nav} focusId={params.id} />}
@@ -131,20 +132,22 @@ function Shell() {
         {route === 'settings' && <Settings nav={nav} />}
       </main>
 
-      <nav className="nav">
+      <nav className="nav" aria-label="เมนูหลัก">
         {TABS.map((t) =>
           t.key === 'run' ? (
-            <button key={t.key} onClick={() => nav('run')} aria-label={tracker.running ? 'กลับไปหน้าวิ่ง' : 'เริ่มวิ่ง'}>
-              <span className={`fab${tracker.running ? ' live' : ''}`}>🏃</span>
+            <button key={t.key} onClick={() => nav('run')} aria-current={route === 'run' ? 'page' : undefined} aria-label={tracker.running ? 'กลับไปหน้าวิ่ง' : 'เริ่มวิ่ง'}>
+              <span className={`fab${tracker.running ? ' live' : ''}`}><Footprints size={25} /></span>
+              <span>{t.label}</span>
             </button>
           ) : (
             <button
               key={t.key}
               className={route === t.key ? 'on' : ''}
+              aria-current={route === t.key ? 'page' : undefined}
               onClick={() => nav(t.key)}
               style={{ position: 'relative' }}
             >
-              <span className="ico">{t.icon}</span>
+              <span className="ico"><t.icon size={22} strokeWidth={route === t.key ? 2.4 : 1.7} /></span>
               <span>{t.label}</span>
               {t.key === 'home' && unread > 0 && <span className="badge-dot">{unread}</span>}
             </button>

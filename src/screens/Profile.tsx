@@ -132,11 +132,13 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 
       <div className="section-title">เหรียญตรา</div>
       <div className="card">
-        <div className="row wrap" style={{ gap: 8 }}>
+        <div className="achievement-grid">
           {badges.map((b) => (
-            <span key={b.name} className={`chip ${b.earned ? 'on' : ''}`} title={b.detail}>
-              {b.icon} {b.name}
-            </span>
+            <div key={b.name} className={`achievement ${b.earned ? 'earned' : ''}`}>
+              <span className="achievement-medal" aria-hidden="true">{b.icon}</span>
+              <strong>{b.name}</strong><small>{b.detail}</small>
+              <span className="achievement-status">{b.earned ? 'ได้รับแล้ว' : 'ยังไม่ปลดล็อก'}</span>
+            </div>
           ))}
         </div>
       </div>
@@ -346,7 +348,7 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 function earnedBadges(km: number, runCount: number, friendCount: number, level: number) {
   return [
     { icon: '👟', name: 'ก้าวแรก', detail: 'วิ่งครั้งแรก', earned: runCount >= 1 },
-    { icon: '5️⃣', name: '5K แรก', detail: 'วิ่งครบ 5 กม. ในครั้งเดียว', earned: km >= 5 },
+    { icon: '5️⃣', name: '5K แรก', detail: 'ระยะสะสม 5 กม.', earned: km >= 5 },
     { icon: '🔟', name: '10K คลับ', detail: 'ระยะสะสม 10 กม.', earned: km >= 10 },
     { icon: '💯', name: '100 กิโล', detail: 'ระยะสะสม 100 กม.', earned: km >= 100 },
     { icon: '🤝', name: 'ก๊วนแน่น', detail: 'มีเพื่อน 5 คน', earned: friendCount >= 5 },
