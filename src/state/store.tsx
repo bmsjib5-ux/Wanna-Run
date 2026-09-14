@@ -27,6 +27,7 @@ import { bump, emptyCounters, rollover } from '../lib/counters'
 import { normalizeCode, uid } from '../lib/id'
 import { whenLabel } from '../lib/format'
 import { pushNotice } from '../lib/notify'
+import { emitGreetReceived } from '../lib/greet'
 import { blobToDataUrl, squareThumbnail } from '../lib/image'
 import { describeAuthError, isCloudConfigured } from '../lib/supabase'
 import * as api from '../lib/api'
@@ -129,6 +130,9 @@ type Actions = {
   recordGame: (game: GameKey, score: number, coins: number, xp: number) => void
   markSpun: () => void
 
+  /** ทักเพื่อนด้วยอิโมจิ คืน true เมื่อส่งได้ */
+  greetFriend: (friendId: ID, emoji: string) => Promise<boolean>
+
   addNotification: (n: Omit<AppNotification, 'id' | 'at' | 'read'>, alsoNotify?: boolean) => void
   markAllRead: () => void
   markRead: (id: ID) => void
@@ -173,6 +177,8 @@ export function StoreProvider({
   const progressLoadedRef = useRef(false)
   // เทียบคำชวนรอบก่อนเพื่อหาว่ามีอะไรใหม่ — ข้ามรอบแรกกันแจ้งเตือนย้อนหลังทั้งกอง
   const invitesSeenRef = useRef(false)
+  // เวลาของคำทักล่าสุดที่แสดงไปแล้ว เริ่มที่ "ตอนนี้" จะได้ไม่ยกของเก่ามาเด้งรัว ๆ ตอนเปิดแอป
+  const greetSeenAtRef = useRef(Date.now())
 
   useEffect(() => {
     save(state, userId)
@@ -227,6 +233,17 @@ export function StoreProvider({
     },
     [addNotification],
   )
+
+  /** เพื่อนทักมา — เด้งอิโมจิกลางจอ แล้วเก็บเข้ากระดิ่งไว้ดูย้อนหลัง */
+  const pullGreetings = useCallback(async () => {
+    const list = await api.fetchGreetingsFor(greetSeenAtRef.current).catch(() => [])
+    for (const g of list) {
+      greetSeenAtRef.current = Math.max(greetSeenAtRef.current, g.at)
+      const name = stateRef.current.friends.find((f) => f.id === g.senderId)?.name ?? 'เพื่อน'
+      emitGreetReceived({ emoji: g.emoji, from: name })
+      addNotification({ kind: 'greet', title: `${name} ทักคุณ ${g.emoji}`, body: 'ทักกลับได้จากหน้าก๊วนวิ่ง', goto: 'friends' })
+    }
+  }, [addNotification])
 
   /** ดึงข้อมูลฝั่งเซิร์ฟเวอร์มาทับส่วนที่เป็นข้อมูลร่วม (โปรไฟล์ เพื่อน กลุ่ม นัดวิ่ง) */
   const refresh = useCallback(async () => {
@@ -344,6 +361,10 @@ export function StoreProvider({
         })
         if (patched) return
       }
+      if (table === 'greetings') {
+        void pullGreetings()
+        return
+      }
       void refresh()
     })
 
@@ -351,7 +372,9 @@ export function StoreProvider({
     // จึงถามซ้ำเป็นระยะและตอนกลับมาโฟกัสหน้าจอ เพื่อไม่ให้ข้อมูลค้างเมื่อ websocket หลุด
     const timer = window.setInterval(() => void refresh(), 30_000)
     const onWake = () => {
-      if (document.visibilityState === 'visible') void refresh()
+      if (document.visibilityState !== 'visible') return
+      void refresh()
+      void pullGreetings()
     }
     document.addEventListener('visibilitychange', onWake)
     window.addEventListener('focus', onWake)
@@ -380,7 +403,7 @@ export function StoreProvider({
       document.removeEventListener('visibilitychange', onWake)
       window.removeEventListener('focus', onWake)
     }
-  }, [cloud, userId, refresh])
+  }, [cloud, userId, refresh, pullGreetings])
 
   // ส่ง XP เหรียญ ตัวนับ และภารกิจที่รับรางวัลแล้วขึ้นคลาวด์
   // หน่วงไว้ 3 วินาทีเพราะค่าพวกนี้เปลี่ยนถี่ (เล่นเกมทีละหลายครั้ง)
@@ -616,6 +639,30 @@ export function StoreProvider({
             goto: 'friends',
           })
         }
+      },
+
+      greetFriend: async (friendId, emoji) => {
+        if (!cloudRef.current) {
+          pushNotice('ทักเพื่อนไม่ได้', 'โหมดในเครื่องยังไม่มีเพื่อนจริงให้ทัก')
+          return false
+        }
+        const friend = stateRef.current.friends.find((f) => f.id === friendId)
+        try {
+          await api.sendGreeting(friendId, emoji)
+        } catch (err) {
+          // ฐานข้อมูลกันสแปมไว้ที่ 10 ครั้ง/นาที ข้อความจากตรงนั้นอ่านรู้เรื่องอยู่แล้ว
+          pushNotice('ทักไม่สำเร็จ', err instanceof Error ? err.message : 'ลองใหม่อีกครั้ง')
+          return false
+        }
+        await api.sendPush({
+          to: friendId,
+          title: `${stateRef.current.profile.name} ทักคุณ ${emoji}`,
+          body: 'แตะเพื่อทักกลับ',
+          goto: 'friends',
+          tag: `greet:${stateRef.current.profile.id}`,
+        })
+        pushNotice(`ทัก ${friend?.name ?? 'เพื่อน'} แล้ว ${emoji}`, 'เดี๋ยวเขาเห็นแน่นอน')
+        return true
       },
 
       declineFriend: (friendId) => {

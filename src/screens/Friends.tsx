@@ -12,6 +12,7 @@ import { useStore } from '../state/store'
 import { paceLabel } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
 import type { Friend } from '../types'
+import { GREET_EMOJIS } from '../lib/api'
 
 export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }) {
   const { state, actions } = useStore()
@@ -300,11 +301,36 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
 }
 
 function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemove: () => void }) {
+  const { actions } = useStore()
   const [open, setOpen] = useState(false)
+  const [greetOpen, setGreetOpen] = useState(false)
+  const [sending, setSending] = useState(false)
   const now = useNow()
   const online = isOnline(friend, now)
+
+  const greet = async (emoji: string) => {
+    setSending(true)
+    const ok = await actions.greetFriend(friend.id, emoji)
+    setSending(false)
+    if (ok) {
+      setGreetOpen(false)
+      setOpen(false)
+    }
+  }
+
+  const picker = (
+    <div className="greet-picker">
+      {GREET_EMOJIS.map((e) => (
+        <button key={e} disabled={sending} onClick={() => void greet(e)} aria-label={`ทักด้วย ${e}`}>
+          {e}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <>
+      <div className="friend-row">
       <button className="list-btn" onClick={() => setOpen(true)}>
         <Avatar emoji={friend.emoji} photo={friend.avatarUrl} name={friend.name} online={online} />
         <span className="grow">
@@ -318,6 +344,26 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
         </span>
         <PresenceBadge presence={friend} now={now} />
       </button>
+      {online && (
+        <button
+          className="greet-btn"
+          onClick={() => setGreetOpen(true)}
+          aria-label={`ทักทาย ${friend.name}`}
+          title={`ทักทาย ${friend.name}`}
+        >
+          👋
+        </button>
+      )}
+      </div>
+
+      <Sheet
+        open={greetOpen}
+        title={`ทัก ${friend.name}`}
+        subtitle="เลือกอิโมจิที่อยากส่ง — เด้งขึ้นจอเขาทันที แม้ปิดแอปอยู่"
+        onClose={() => setGreetOpen(false)}
+      >
+        {picker}
+      </Sheet>
 
       <Sheet
         open={open}
@@ -343,6 +389,11 @@ function FriendRow({ friend, nav, onRemove }: { friend: Friend; nav: Nav; onRemo
             </div>
           </div>
         </div>
+        <div className="section-title" style={{ marginTop: 14 }}>
+          ทักทาย{online ? ' · ออนไลน์อยู่ตอนนี้' : ''}
+        </div>
+        {picker}
+
         <div className="stack-8" style={{ marginTop: 14 }}>
           <button
             className="btn primary block"

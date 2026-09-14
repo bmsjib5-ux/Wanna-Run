@@ -12,6 +12,7 @@ import { usePush } from './lib/usePush'
 import Auth from './screens/Auth'
 import ResetPassword from './screens/ResetPassword'
 import Toaster from './components/Toaster'
+import GreetBurst from './components/GreetBurst'
 import Onboarding from './screens/Onboarding'
 import Home from './screens/Home'
 import Friends from './screens/Friends'
@@ -205,6 +206,7 @@ function Shell() {
       </nav>
 
       <Toaster />
+      <GreetBurst />
     </div>
   )
 }
