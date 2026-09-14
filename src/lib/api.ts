@@ -514,7 +514,7 @@ export async function fetchFriendLocations(): Promise<FriendLocation[]> {
     }))
 }
 
-const WATCHED_TABLES = ['friendships', 'invites', 'invite_replies', 'locations', 'profiles']
+const WATCHED_TABLES = ['friendships', 'invites', 'invite_replies', 'locations', 'profiles', 'greetings']
 
 /**
  * รับสัญญาณเมื่อข้อมูลฝั่งเซิร์ฟเวอร์เปลี่ยน คืนฟังก์ชันสำหรับยกเลิก
@@ -821,4 +821,38 @@ export async function sendPush(message: PushMessage): Promise<void> {
   } catch (err) {
     console.warn('ส่งแจ้งเตือนไม่สำเร็จ', err)
   }
+}
+
+// ---------- ทักทายด้วยอิโมจิ ----------
+
+/** ชุดอิโมจิสำหรับทักเพื่อน — เลือกที่สื่อความหมายชัดและอ่านออกในขนาดเล็ก */
+export const GREET_EMOJIS = ['👋', '🔥', '💪', '🏃', '☕', '🎉', '❤️', '😂'] as const
+
+export type Greeting = { id: ID; senderId: ID; emoji: string; at: number }
+
+export async function sendGreeting(receiverId: ID, emoji: string): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+  const { error } = await requireSupabase().from('greetings').insert({ sender: uid, receiver: receiverId, emoji })
+  if (error) throw error
+}
+
+/** ที่เพื่อนทักมาหาเราหลังเวลาที่ระบุ — ใช้ตอน realtime บอกว่ามีของใหม่ */
+export async function fetchGreetingsFor(sinceMs: number): Promise<Greeting[]> {
+  const uid = await currentUserId()
+  if (!uid) return []
+  const { data, error } = await requireSupabase()
+    .from('greetings')
+    .select('id,sender,emoji,created_at')
+    .eq('receiver', uid)
+    .gt('created_at', new Date(sinceMs).toISOString())
+    .order('created_at', { ascending: true })
+    .limit(20)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id as ID,
+    senderId: row.sender as ID,
+    emoji: String(row.emoji),
+    at: new Date(row.created_at as string).getTime(),
+  }))
 }

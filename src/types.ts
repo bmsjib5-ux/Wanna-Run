@@ -116,7 +116,7 @@ export type Mission = {
 
 export type AppNotification = {
   id: ID
-  kind: 'invite' | 'friend' | 'group' | 'mission' | 'location' | 'run' | 'game'
+  kind: 'invite' | 'friend' | 'group' | 'mission' | 'location' | 'run' | 'game' | 'greet'
   title: string
   body: string
   at: number
