@@ -35,3 +35,7 @@ android/app/google-services.json
 
 # ภาพจากการทดสอบด้วย Playwright
 shots/
+
+# ไฟล์ล็อกที่ deno check สร้างตอนตรวจโค้ด Edge Function ในเครื่อง
+# (ตอน deploy จริง Supabase รวมไฟล์ให้เอง ไม่ได้ใช้ไฟล์นี้)
+deno.lock
