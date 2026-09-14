@@ -428,6 +428,22 @@ export function StoreProvider({
     })
 
     /** เรียก API แล้วรีเฟรช พร้อมแจ้งเตือนเมื่อพลาด */
+    /**
+     * RPC ส่งคำขอเพื่อนคืนมาแค่ข้อความ จึงต้องถามรายชื่อเพื่อนอีกครั้งเพื่อหา id ของเจ้าของรหัส
+     * (เกิดเฉพาะตอนกดเพิ่มเพื่อน ไม่ได้เรียกบ่อย)
+     */
+    const notifyFriendRequest = async (code: string) => {
+      const target = (await api.fetchFriends()).find((f) => f.code === code)
+      if (!target) return
+      await api.sendPush({
+        to: target.id,
+        title: 'มีคำขอเป็นเพื่อน 👋',
+        body: `${stateRef.current.profile.name} อยากเพิ่มคุณเข้าก๊วน`,
+        goto: 'friends',
+        tag: `friend:${target.id}`,
+      })
+    }
+
     const remote = (fn: () => Promise<unknown>) => {
       fn()
         .then(() => refresh())
@@ -517,6 +533,7 @@ export function StoreProvider({
           remote(async () => {
             const message = await api.sendFriendRequestByCode(code)
             pushNotice('เพิ่มเพื่อน', message)
+            await notifyFriendRequest(code)
           })
           return { ok: true, message: 'กำลังส่งคำขอ...' }
         }
@@ -555,7 +572,10 @@ export function StoreProvider({
         const target = stateRef.current.friends.find((f) => f.id === friendId)
         if (!target) return
         if (cloudRef.current) {
-          remote(() => api.sendFriendRequestByCode(target.code))
+          remote(async () => {
+            await api.sendFriendRequestByCode(target.code)
+            await notifyFriendRequest(target.code)
+          })
           return
         }
         patch((s) => ({
@@ -571,6 +591,13 @@ export function StoreProvider({
           remote(async () => {
             await api.acceptFriendRequest(friendId)
             patch((s) => bumpMetric(s, 'friendAdded', 1))
+            await api.sendPush({
+              to: friendId,
+              title: 'เป็นเพื่อนกันแล้ว 🎉',
+              body: `${stateRef.current.profile.name} ตอบรับคำขอเป็นเพื่อนของคุณแล้ว`,
+              goto: 'friends',
+              tag: `friend:${friendId}`,
+            })
           })
         } else {
           patch((s) =>
@@ -669,7 +696,17 @@ export function StoreProvider({
         }
         patch((s) => bumpMetric(s, 'inviteSent', 1))
         if (cloudRef.current) {
-          remote(() => api.createInviteRemote({ ...input, title: invite.title, note: invite.note }))
+          remote(async () => {
+            await api.createInviteRemote({ ...input, title: invite.title, note: invite.note })
+            // เด้งถึงเพื่อนแม้เขาปิดแอปอยู่ — ส่วนคนที่เปิดแอปค้างไว้ realtime จะแจ้งให้เองอยู่แล้ว
+            await api.sendPush({
+              to: input.inviteeIds,
+              title: `${stateRef.current.profile.name} ชวนคุณไปวิ่ง 📣`,
+              body: `${invite.title} · ${invite.place.name} · ${whenLabel(invite.startAt)}`,
+              goto: 'invites',
+              tag: `invite:${invite.id}`,
+            })
+          })
         } else {
           patch((s) => ({ ...s, invites: [invite, ...s.invites] }))
           scheduleReplies(invite)
@@ -682,7 +719,21 @@ export function StoreProvider({
           ...s,
           invites: s.invites.map((i) => (i.id === inviteId ? { ...i, myReply: reply } : i)),
         }))
-        if (cloudRef.current) remote(() => api.replyInviteRemote(inviteId, reply))
+        if (cloudRef.current) {
+          const invite = stateRef.current.invites.find((i) => i.id === inviteId)
+          remote(async () => {
+            await api.replyInviteRemote(inviteId, reply)
+            if (invite?.hostId) {
+              await api.sendPush({
+                to: invite.hostId,
+                title: `${stateRef.current.profile.name} ${REPLY_TITLE[reply]}`,
+                body: `${invite.title} · ${invite.place.name} · ${whenLabel(invite.startAt)}`,
+                goto: 'invites',
+                tag: `invite:${invite.id}`,
+              })
+            }
+          })
+        }
       },
 
       cancelInvite: (inviteId) => {

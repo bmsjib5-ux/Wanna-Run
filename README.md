@@ -80,6 +80,9 @@ npm run preview  # ลองรันไฟล์ production
 
 และ [`supabase/spots.sql`](supabase/spots.sql) สำหรับจุดวิ่งประจำ (ตาราง `spots` ของใครของมัน — ถ้ายังไม่รัน จุดที่บันทึกจะอยู่แค่ในเครื่องและขึ้นเตือนซิงก์ไม่สำเร็จ)
 
+และ [`supabase/push.sql`](supabase/push.sql) สำหรับแจ้งเตือนตอนปิดแอป
+(ตาราง `push_tokens` — ต้องตั้งค่า Firebase/VAPID เพิ่มด้วย ดู [วิธีตั้งค่าแจ้งเตือน](docs/push-notifications.md))
+
 > ถ้าเคยรัน `schema.sql` เวอร์ชันแรกไปแล้ว ให้รัน `supabase/fix-invite-recursion.sql`
 > และ `supabase/fix-2-invite-policies.sql` ตามลำดับ เพื่ออัปเดต policy ให้ตรงกับเวอร์ชันล่าสุด
 

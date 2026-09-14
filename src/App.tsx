@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from './state/auth'
 import { isCloudConfigured } from './lib/supabase'
 import { takeCodeFromUrl } from './lib/friendLink'
 import { takeSpotFromUrl } from './lib/spotLink'
+import { onPushOpened } from './lib/push'
+import { usePush } from './lib/usePush'
 import Auth from './screens/Auth'
 import ResetPassword from './screens/ResetPassword'
 import Toaster from './components/Toaster'
@@ -36,6 +38,23 @@ export type Route =
 
 export type Nav = (route: Route, params?: Record<string, string>) => void
 
+const ROUTES: readonly Route[] = [
+  'home',
+  'friends',
+  'groups',
+  'invites',
+  'run',
+  'map',
+  'games',
+  'profile',
+  'notifications',
+  'settings',
+]
+
+function asRoute(value: unknown): Route | null {
+  return typeof value === 'string' && (ROUTES as readonly string[]).includes(value) ? (value as Route) : null
+}
+
 const TABS = [
   { key: 'home', label: 'หน้าหลัก', icon: House },
   { key: 'invites', label: 'นัดวิ่ง', icon: CalendarDays },
@@ -45,7 +64,7 @@ const TABS = [
 ] as const
 
 function Shell() {
-  const { state, syncing } = useStore()
+  const { state, syncing, cloud } = useStore()
   const { tracker } = useRun()
   const [route, setRoute] = useState<Route>('home')
   const [params, setParams] = useState<Record<string, string>>({})
@@ -66,6 +85,36 @@ function Shell() {
     // ลิงก์จุดวิ่งที่เพื่อนส่งมา (?spot=lat,lng) เปิดแผนที่พร้อมปักหมุดให้
     const spot = takeSpotFromUrl()
     if (spot) nav('map', { lat: String(spot.lat), lng: String(spot.lng), name: spot.name, area: spot.area })
+  }, [nav])
+
+  usePush(cloud)
+
+  // แตะแจ้งเตือนจากแถบสถานะ ให้เปิดตรงไปยังหน้าที่เกี่ยวข้อง
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const fromUrl = asRoute(url.searchParams.get('goto'))
+    if (fromUrl) {
+      nav(fromUrl)
+      url.searchParams.delete('goto')
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+    }
+
+    const stopNative = onPushOpened((route) => {
+      const target = asRoute(route)
+      if (target) nav(target)
+    })
+
+    const hasSw = 'serviceWorker' in navigator
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'wanna-run:goto') return
+      const target = asRoute(event.data.route)
+      if (target) nav(target)
+    }
+    if (hasSw) navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => {
+      stopNative()
+      if (hasSw) navigator.serviceWorker.removeEventListener('message', onMessage)
+    }
   }, [nav])
 
   // ปุ่มย้อนกลับของเบราว์เซอร์ให้กลับมาหน้าหลักแทนการออกจากแอป
