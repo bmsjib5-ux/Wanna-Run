@@ -35,8 +35,21 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           GIT_COMMIT: ${{ github.sha }}
         run: npm run build
+
+      - name: ใส่ google-services.json สำหรับแจ้งเตือน (ถ้ามี)
+        # ไม่มีไฟล์นี้แอปก็สร้างได้ตามปกติ แค่ไม่มีแจ้งเตือนตอนปิดแอป
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "ใส่ google-services.json แล้ว — แจ้งเตือนแบบ push ใช้งานได้"
+          else
+            echo "ไม่ได้ตั้ง secret GOOGLE_SERVICES_JSON — ข้ามแจ้งเตือนแบบ push"
+          fi
 
       - name: ซิงก์เข้าโปรเจกต์ Android
         run: npx cap sync android

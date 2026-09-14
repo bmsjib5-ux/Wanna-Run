@@ -15,7 +15,9 @@ import type {
 import { requireSupabase } from './supabase'
 import { squareThumbnail } from './image'
 import { simplifyPath } from './geo'
+import { startOfWeek } from './format'
 import { setServerTime } from './presence'
+import type { PushRegistration } from './push'
 
 /** uuid v4 สำหรับแถวใหม่ — randomUUID ต้องใช้บน https ส่วน fallback ใช้ได้ทุกที่ */
 export function newId(): string {
@@ -41,6 +43,8 @@ type ProfileRow = {
   sharing_location: boolean
   last_active_at: string
   is_online?: boolean | null
+  weekly_score?: number | null
+  weekly_score_at?: string | null
   created_at: string
 }
 
@@ -64,6 +68,12 @@ function toProfile(row: ProfileRow, local: Pick<Profile, 'level' | 'xp' | 'coins
   }
 }
 
+/** คะแนนสัปดาห์นี้เท่านั้น ของสัปดาห์ก่อนถือว่าเป็น 0 (กระดานรีเซ็ตทุกสัปดาห์) */
+function weeklyScoreOf(row: ProfileRow): number {
+  if (!row.weekly_score || !row.weekly_score_at) return 0
+  return new Date(row.weekly_score_at).getTime() >= startOfWeek() ? row.weekly_score : 0
+}
+
 function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Friend {
   return {
     id: row.id,
@@ -75,6 +85,7 @@ function toFriend(row: ProfileRow, status: Friend['status'], home: LatLng): Frie
     bio: row.bio ?? '',
     totalKm: Math.round(Number(row.total_km ?? 0)),
     avgPaceSec: row.avg_pace_sec ?? 360,
+    weeklyScore: weeklyScoreOf(row),
     home,
     sharingLocation: row.sharing_location,
     lastActiveAt: new Date(row.last_active_at).getTime(),
@@ -706,6 +717,17 @@ export async function saveProgress(p: Progress): Promise<void> {
   if (error) throw error
 }
 
+/** ส่งคะแนนมินิเกมสัปดาห์นี้ขึ้นโปรไฟล์ ให้เพื่อนเห็นบนกระดาน */
+export async function updateWeeklyScore(score: number): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase()
+    .from('profiles')
+    .update({ weekly_score: Math.round(score), weekly_score_at: new Date().toISOString() })
+    .eq('id', uid)
+  if (error) throw error
+}
+
 export async function fetchGameScores(): Promise<Partial<Record<GameKey, number>>> {
   const { data, error } = await requireSupabase().from('game_scores').select('game,best_score')
   if (error) throw error
@@ -756,4 +778,47 @@ export async function removeAvatar(): Promise<void> {
   // ล้างค่าตรง ๆ เพราะ updateMyProfile ข้ามฟิลด์ที่เป็น undefined
   const { error } = await sb.from('profiles').update({ avatar_url: null }).eq('id', uid)
   if (error) throw error
+}
+
+// ---------- แจ้งเตือนแบบ push ----------
+
+/** จำอุปกรณ์นี้ไว้ให้เซิร์ฟเวอร์ส่งแจ้งเตือนมาได้ แม้ตอนที่ปิดแอปอยู่ */
+export async function savePushToken(reg: PushRegistration): Promise<void> {
+  const uid = await currentUserId()
+  if (!uid) return
+  const { error } = await requireSupabase().from('push_tokens').upsert(
+    {
+      user_id: uid,
+      platform: reg.platform,
+      token: reg.token,
+      p256dh: reg.p256dh ?? null,
+      auth: reg.auth ?? null,
+      device: reg.device,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'token' },
+  )
+  if (error) throw error
+}
+
+export async function deletePushToken(token: string): Promise<void> {
+  const { error } = await requireSupabase().from('push_tokens').delete().eq('token', token)
+  if (error) throw error
+}
+
+export type PushMessage = { to: ID | ID[]; title: string; body: string; goto?: string; tag?: string }
+
+/**
+ * ยิงแจ้งเตือนถึงเพื่อน ผ่าน Edge Function "push"
+ * เป็นงานเสริม — ถ้าส่งไม่ได้ก็แค่ไม่มีแจ้งเตือนเด้ง ไม่ควรทำให้สิ่งที่ผู้ใช้เพิ่งทำล้มเหลว
+ */
+export async function sendPush(message: PushMessage): Promise<void> {
+  const to = (Array.isArray(message.to) ? message.to : [message.to]).filter(Boolean)
+  if (!to.length) return
+  try {
+    const { error } = await requireSupabase().functions.invoke('push', { body: { ...message, to } })
+    if (error) console.warn('ส่งแจ้งเตือนไม่สำเร็จ', error.message)
+  } catch (err) {
+    console.warn('ส่งแจ้งเตือนไม่สำเร็จ', err)
+  }
 }

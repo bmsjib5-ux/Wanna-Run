@@ -10,6 +10,7 @@ import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '..
 import { uid } from '../lib/id'
 import { notificationPermission, requestNotificationPermission } from '../lib/notify'
 import { ensureNotificationPermission, isNative } from '../lib/native'
+import ImportRunSheet from '../components/ImportRunSheet'
 import type { RunSession } from '../types'
 
 export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; inviteId?: string }) {
@@ -18,6 +19,7 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
   const { tracker, inviteId: activeInvite, wake, start, pause, resume, stop, reset } = useRun()
   const [summary, setSummary] = useState<RunSession | null>(null)
   const [askSim, setAskSim] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   // ถ้ากำลังวิ่งอยู่ ใช้นัดที่ผูกไว้ตอนเริ่ม (กลับมาจากหน้าอื่นจะไม่มีพารามิเตอร์แล้ว)
   const inviteId = tracker.running ? activeInvite : inviteParam
@@ -71,7 +73,17 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
         onBack={tracker.running ? undefined : () => nav('home')}
       />
 
-      <div className="card">
+      <div className="run-map-stage">
+        <Map
+          center={center}
+          zoom={16}
+          fit={fit}
+          track={tracker.path}
+          pins={[{ id: 'me', pos: center, emoji: state.profile.emoji, label: 'คุณ', me: true }]}
+        />
+        <span className="run-map-label">{tracker.running ? 'เส้นทางของคุณ' : 'จุดเริ่มต้นของคุณ'}</span>
+      </div>
+      <div className="card run-dashboard">
         <div className="run-hero">
           <div className="dist">{formatKm(tracker.distanceM)}</div>
           <div className="unit">กิโลเมตร</div>
@@ -177,17 +189,19 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
         )}
       </div>
 
-      <div className="section-title">เส้นทาง</div>
-      <Map
-        center={center}
-        zoom={16}
-        fit={fit}
-        track={tracker.path}
-        pins={[{ id: 'me', pos: center, emoji: state.profile.emoji, label: 'คุณ', me: true }]}
-      />
-
       {!tracker.running && (
         <>
+          <button className="list-btn" style={{ marginTop: 14 }} onClick={() => setImportOpen(true)}>
+            <span className="avatar">⌚</span>
+            <span className="grow">
+              <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+                นำเข้าจากนาฬิกา
+              </span>
+              <span className="muted small">วิ่งด้วยนาฬิกามาแล้ว? นำไฟล์ .gpx .tcx .fit เข้าประวัติได้</span>
+            </span>
+            <span className="muted">›</span>
+          </button>
+
           <div className="section-title">
             ประวัติล่าสุด
             <span className="spacer" />
@@ -219,6 +233,13 @@ export default function RunScreen({ nav, inviteId: inviteParam }: { nav: Nav; in
           )}
         </>
       )}
+
+      <ImportRunSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existing={state.runs}
+        onSave={(imported) => actions.saveRun(imported)}
+      />
 
       <Sheet
         open={askSim}

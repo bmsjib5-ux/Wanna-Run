@@ -1,5 +1,5 @@
 // service worker แบบง่าย: แคชไฟล์ของแอปไว้ใช้ตอนออฟไลน์
-const CACHE = 'wanna-run-v1'
+const CACHE = 'wanna-run-v2'
 const CORE = ['/', '/index.html', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -37,14 +37,50 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
+// แจ้งเตือนจากเซิร์ฟเวอร์ — ทำงานแม้ผู้ใช้ปิดแท็บแอปไปแล้ว
+self.addEventListener('push', (event) => {
+  const payload = { title: 'ไปวิ่งไหม', body: '', goto: '', tag: 'wanna-run:push' }
+  if (event.data) {
+    try {
+      Object.assign(payload, event.data.json())
+    } catch {
+      payload.body = event.data.text()
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: payload.tag || 'wanna-run:push',
+      renotify: true,
+      data: { goto: payload.goto || '' },
+    }),
+  )
+})
+
+// ถ้าเบราว์เซอร์ต่ออายุการสมัครรับแจ้งเตือนเอง ให้แอปรู้เพื่อบันทึก token ใหม่
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      list.forEach((c) => c.postMessage({ type: 'wanna-run:resubscribe' }))
+    }),
+  )
+})
+
 // แตะแจ้งเตือน (เช่น ตัวเลขระยะทางระหว่างวิ่ง) ให้กลับมาที่แอปแท็บเดิม ไม่เปิดซ้ำ
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = (event.notification.data && event.notification.data.url) || '/'
+  const data = event.notification.data || {}
+  const goto = data.goto || ''
+  const target = data.url || (goto ? `/?goto=${encodeURIComponent(goto)}` : '/')
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const existing = list.find((c) => 'focus' in c)
-      if (existing) return existing.focus()
+      if (existing) {
+        if (goto) existing.postMessage({ type: 'wanna-run:goto', route: goto })
+        return existing.focus()
+      }
       return self.clients.openWindow(target)
     }),
   )

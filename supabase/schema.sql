@@ -20,6 +20,8 @@ create table if not exists public.profiles (
   sharing_location  boolean not null default false,
   last_active_at    timestamptz not null default now(),
   is_online         boolean not null default false,
+  weekly_score      int not null default 0,
+  weekly_score_at   timestamptz,
   created_at        timestamptz not null default now()
 );
 

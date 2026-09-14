@@ -5,13 +5,11 @@ import Sheet from '../components/Sheet'
 import Map from '../components/Map'
 import Avatar from '../components/Avatar'
 import AvatarPicker from '../components/AvatarPicker'
-import ThemePicker from '../components/ThemePicker'
 import AboutBuild from '../components/AboutBuild'
 import { levelOf, useStore } from '../state/store'
 import { useAuth } from '../state/auth'
 import { boundsOf, estimateKcal, formatDuration, formatKm, formatPace } from '../lib/geo'
 import { shortDate, startOfWeek, whenLabel } from '../lib/format'
-import { notificationPermission, requestNotificationPermission } from '../lib/notify'
 import { nameHint, useNameCheck } from '../lib/useNameCheck'
 import type { RunSession } from '../types'
 
@@ -29,7 +27,6 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
   const [editing, setEditing] = useState(false)
   const [detail, setDetail] = useState<RunSession | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
-  const [perm, setPerm] = useState(notificationPermission())
   // แก้ชื่อในสถานะชั่วคราวก่อน แล้วค่อยบันทึกทีเดียว
   // ของเดิมยิงอัปเดตขึ้นเซิร์ฟเวอร์ทุกตัวอักษรที่พิมพ์
   const [draftName, setDraftName] = useState(profile.name)
@@ -135,37 +132,15 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 
       <div className="section-title">เหรียญตรา</div>
       <div className="card">
-        <div className="row wrap" style={{ gap: 8 }}>
+        <div className="achievement-grid">
           {badges.map((b) => (
-            <span key={b.name} className={`chip ${b.earned ? 'on' : ''}`} title={b.detail}>
-              {b.icon} {b.name}
-            </span>
+            <div key={b.name} className={`achievement ${b.earned ? 'earned' : ''}`}>
+              <span className="achievement-medal" aria-hidden="true">{b.icon}</span>
+              <strong>{b.name}</strong><small>{b.detail}</small>
+              <span className="achievement-status">{b.earned ? 'ได้รับแล้ว' : 'ยังไม่ปลดล็อก'}</span>
+            </div>
           ))}
         </div>
-      </div>
-
-      <div className="section-title">การแจ้งเตือน</div>
-      <div className="card tight row">
-        <span className="avatar sm">🔔</span>
-        <div className="grow">
-          <div className="strong" style={{ fontSize: 14 }}>
-            แจ้งเตือนจากระบบ
-          </div>
-          <div className="muted tiny">
-            {perm === 'granted'
-              ? 'เปิดอยู่ — จะเตือนเมื่อเพื่อนชวนวิ่งหรือตอบรับนัด'
-              : perm === 'denied'
-                ? 'ถูกปฏิเสธ ต้องเปิดสิทธิ์ในตั้งค่าเบราว์เซอร์'
-                : perm === 'unsupported'
-                  ? 'เบราว์เซอร์นี้ไม่รองรับ แต่ยังเห็นแจ้งเตือนในแอปได้'
-                  : 'ยังไม่ได้เปิด'}
-          </div>
-        </div>
-        {perm !== 'granted' && perm !== 'unsupported' && (
-          <button className="btn primary xs" onClick={async () => setPerm(await requestNotificationPermission())}>
-            เปิด
-          </button>
-        )}
       </div>
 
       <div className="section-title" ref={runsRef} style={{ scrollMarginTop: 12 }}>
@@ -202,7 +177,16 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
       )}
 
       <div className="section-title">ตั้งค่า</div>
-      <ThemePicker />
+      <button className="list-btn" onClick={() => nav('settings')}>
+        <span className="avatar">⚙️</span>
+        <span className="grow">
+          <span className="strong" style={{ display: 'block', fontSize: 14.5 }}>
+            การแจ้งเตือนและธีมของแอป
+          </span>
+          <span className="muted small">เปิดแจ้งเตือน เลือกโหมดมืด/สว่าง สีหลัก และรูปพื้นหลัง</span>
+        </span>
+        <span className="muted">›</span>
+      </button>
       <AboutBuild />
       <div className="stack-8" style={{ marginTop: 12 }}>
         {cloud && <SignOutButton />}
@@ -364,7 +348,7 @@ export default function Profile({ nav, section }: { nav: Nav; section?: 'runs' }
 function earnedBadges(km: number, runCount: number, friendCount: number, level: number) {
   return [
     { icon: '👟', name: 'ก้าวแรก', detail: 'วิ่งครั้งแรก', earned: runCount >= 1 },
-    { icon: '5️⃣', name: '5K แรก', detail: 'วิ่งครบ 5 กม. ในครั้งเดียว', earned: km >= 5 },
+    { icon: '5️⃣', name: '5K แรก', detail: 'ระยะสะสม 5 กม.', earned: km >= 5 },
     { icon: '🔟', name: '10K คลับ', detail: 'ระยะสะสม 10 กม.', earned: km >= 10 },
     { icon: '💯', name: '100 กิโล', detail: 'ระยะสะสม 100 กม.', earned: km >= 100 },
     { icon: '🤝', name: 'ก๊วนแน่น', detail: 'มีเพื่อน 5 คน', earned: friendCount >= 5 },

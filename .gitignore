@@ -31,3 +31,7 @@ dist-ssr
 public/build-info.json
 *.keystore
 *.jks
+android/app/google-services.json
+
+# ภาพจากการทดสอบด้วย Playwright
+shots/
