@@ -19,42 +19,55 @@ export type Streak = {
   nextMilestone: number | null
 }
 
-const DAY = 86_400_000
 const MILESTONES = [3, 7, 14, 30, 60, 100, 200, 365]
 const DAY_LABELS = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
 
-/** เลขวันแบบท้องถิ่น ใช้เทียบว่า "วันเดียวกัน" โดยไม่โดนเขตเวลาเล่นงาน */
-function dayNumber(ts: number): number {
+/**
+ * เที่ยงคืนของวันนั้นตามเวลาเครื่อง ใช้แทน "วัน" ทั้งการเทียบและการแสดงผล
+ *
+ * เคยใช้เลขวัน (epoch หารด้วย 24 ชม.) ซึ่งเทียบว่าวันเดียวกันได้ถูก แต่แปลงกลับ
+ * เป็นวันที่ไม่ได้ เพราะเที่ยงคืนตามเวลาไทยคือ 17:00 UTC ของ "เมื่อวาน"
+ * แถบ 7 วันจึงขึ้นชื่อวันเลื่อนไปหนึ่งวันเสมอสำหรับเขตเวลาที่นำหน้า UTC
+ */
+function startOfDay(ts: number): number {
   const d = new Date(ts)
-  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / DAY)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+/** บวก/ลบวันตามปฏิทิน (ไม่ใช่บวก 24 ชม. — ประเทศที่มี DST วันหนึ่งไม่เท่ากับ 24 ชม.) */
+function addDays(dayStart: number, n: number): number {
+  const d = new Date(dayStart)
+  d.setDate(d.getDate() + n)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
 }
 
 export function computeStreak(runs: RunSession[], now = Date.now()): Streak {
-  const ranDays = new Set(runs.map((r) => dayNumber(r.startedAt)))
-  const today = dayNumber(now)
+  const ranDays = new Set(runs.map((r) => startOfDay(r.startedAt)))
+  const today = startOfDay(now)
   const ranToday = ranDays.has(today)
 
   // นับถอยหลังจากวันนี้ (ถ้ายังไม่วิ่งวันนี้ ให้เริ่มนับจากเมื่อวาน — สตรีคยังไม่ขาดจนกว่าจะหมดวัน)
   let days = 0
-  for (let d = ranToday ? today : today - 1; ranDays.has(d); d--) days++
+  for (let d = ranToday ? today : addDays(today, -1); ranDays.has(d); d = addDays(d, -1)) days++
 
   // สถิติสูงสุด: ไล่ดูช่วงที่ติดกันยาวที่สุด
   let best = 0
   let run = 0
   const sorted = [...ranDays].sort((a, b) => a - b)
   for (let i = 0; i < sorted.length; i++) {
-    run = i > 0 && sorted[i] === sorted[i - 1] + 1 ? run + 1 : 1
+    run = i > 0 && sorted[i] === addDays(sorted[i - 1], 1) ? run + 1 : 1
     if (run > best) best = run
   }
 
   const week = Array.from({ length: 7 }, (_, i) => {
-    const dayNo = today - 6 + i
-    const date = new Date((dayNo + 0.5) * DAY)
+    const date = addDays(today, i - 6)
     return {
-      label: DAY_LABELS[date.getDay()],
-      date: date.getTime(),
-      ran: ranDays.has(dayNo),
-      today: dayNo === today,
+      label: DAY_LABELS[new Date(date).getDay()],
+      date,
+      ran: ranDays.has(date),
+      today: date === today,
     }
   })
 
