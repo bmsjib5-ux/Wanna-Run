@@ -68,11 +68,16 @@ supabase secrets set \
   VAPID_SUBJECT='mailto:อีเมลของคุณ'
 ```
 
-แล้วใส่คีย์สาธารณะไว้ในไฟล์ `.env` ของเว็บด้วย (และตั้งเป็น secret ชื่อ `VITE_VAPID_PUBLIC_KEY` บน GitHub กับบน Render)
+แล้วใส่คีย์สาธารณะ (ค่าเดียวกับ `VAPID_PUBLIC_KEY`) ไว้อีก 2 ที่ ในชื่อ `VITE_VAPID_PUBLIC_KEY`
 
-```
-VITE_VAPID_PUBLIC_KEY=ค่าเดียวกับ VAPID_PUBLIC_KEY
-```
+| ที่ไหน | ทำไม |
+|---|---|
+| `.env` ในเครื่อง | ทดสอบตอนพัฒนา |
+| Render → service `wanna-run` → **Environment** | เว็บจริง — Vite ฝังค่าลงไฟล์ตอน build จึงต้องมีตั้งแต่ตอน build |
+
+(`render.yaml` ประกาศตัวแปรนี้ไว้แล้วแบบ `sync: false` ค่าที่กรอกในแดชบอร์ดจึงไม่ถูกล้างตอน deploy รอบถัดไป)
+
+ใส่แล้วต้องสั่ง **Manual Deploy → Clear build cache & deploy** ที่ Render หนึ่งครั้ง ค่าถึงจะเข้าไปอยู่ในไฟล์
 
 ## 4. ติดตั้ง Edge Function
 

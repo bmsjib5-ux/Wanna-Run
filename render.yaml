@@ -16,6 +16,9 @@ services:
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
+      # คีย์สาธารณะของ Web Push — ไม่มีค่านี้ เว็บจะเตือนได้เฉพาะตอนเปิดแอปอยู่
+      - key: VITE_VAPID_PUBLIC_KEY
+        sync: false
     headers:
       # service worker ต้องไม่ถูกแคช ไม่งั้นผู้ใช้จะค้างอยู่กับเวอร์ชันเก่า
       - path: /sw.js
