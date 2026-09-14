@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
   const vapid = vapidConfig()
   const webBody = JSON.stringify(payload)
   const dead: string[] = []
+  // เก็บสาเหตุที่ส่งไม่ได้ไว้ตอบกลับด้วย — ตอนตั้งค่าครั้งแรกจะได้รู้ว่าติดตรงไหน
+  // (มีแต่รหัสสถานะกับข้อความสั้น ๆ จากปลายทาง ไม่มีค่าลับใด ๆ)
+  const failures: Array<{ platform: string; status: number; reason: string }> = []
   let sent = 0
 
   await Promise.all(
@@ -129,12 +132,21 @@ Deno.serve(async (req) => {
       if (!result) return
       if (result.ok) sent += 1
       else if (result.gone) dead.push(device.token)
-      else console.error('ส่งแจ้งเตือนไม่สำเร็จ', device.platform, result.status, result.detail)
+      else {
+        console.error('ส่งแจ้งเตือนไม่สำเร็จ', device.platform, result.status, result.detail)
+        if (failures.length < 5) {
+          failures.push({ platform: device.platform, status: result.status, reason: (result.detail ?? '').slice(0, 300) })
+        }
+      }
     }),
   )
 
   // อุปกรณ์ที่ถอนแอปหรือยกเลิกสิทธิ์ไปแล้ว ไม่ต้องเก็บไว้ให้รก
   if (dead.length) await admin.from('push_tokens').delete().in('token', dead)
 
-  return json({ sent, devices: devices?.length ?? 0, removed: dead.length })
+  const unconfigured = [
+    ...(fcm ? [] : ['fcm']),
+    ...(vapid ? [] : ['vapid']),
+  ]
+  return json({ sent, devices: devices?.length ?? 0, removed: dead.length, failures, unconfigured })
 })
