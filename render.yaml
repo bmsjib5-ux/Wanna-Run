@@ -27,6 +27,13 @@ services:
       - path: /manifest.webmanifest
         name: Cache-Control
         value: no-cache
+      # หน้าแรกต้องไม่ถูกแคชค้าง เพราะเป็นตัวชี้ไฟล์ของเวอร์ชันล่าสุด (ไฟล์ assets มีแฮสในชื่อ แคชได้นานๆ อยู่แล้ว)
+      - path: /
+        name: Cache-Control
+        value: no-cache
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
     routes:
       # แอปเป็น SPA — เส้นทางที่ไม่ตรงไฟล์ใดให้ตกมาที่ index.html
       - type: rewrite
