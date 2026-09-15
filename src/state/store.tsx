@@ -181,6 +181,11 @@ export function StoreProvider({
   const invitesSeenRef = useRef(false)
   // เวลาของคำทักล่าสุดที่แสดงไปแล้ว เริ่มที่ "ตอนนี้" จะได้ไม่ยกของเก่ามาเด้งรัว ๆ ตอนเปิดแอป
   const greetSeenAtRef = useRef(Date.now())
+  // id ของคำทักที่แสดงไปแล้ว กันแสดงซ้ำเมื่อ realtime กับตอนกลับมาโฟกัสทำงานพร้อมกัน
+  const greetShownRef = useRef(new Set<ID>())
+  // กันสองรอบทับกัน: ถ้ามีสัญญาณใหม่ระหว่างกำลังดึงอยู่ ให้ดึงต่ออีกรอบหลังรอบนี้จบ
+  const greetBusyRef = useRef(false)
+  const greetAgainRef = useRef(false)
 
   useEffect(() => {
     save(state, userId)
@@ -236,14 +241,32 @@ export function StoreProvider({
     [addNotification],
   )
 
-  /** เพื่อนทักมา — เด้งอิโมจิกลางจอ แล้วเก็บเข้ากระดิ่งไว้ดูย้อนหลัง */
+  /** เพื่อนทักมา — เด้งอิโมจิกลางจอ แล้วเก็บเข้ากระดิ่งไว้ดูย้อนหลัง (ครั้งเดียวต่อหนึ่งคำทัก) */
   const pullGreetings = useCallback(async () => {
-    const list = await api.fetchGreetingsFor(greetSeenAtRef.current).catch(() => [])
-    for (const g of list) {
-      greetSeenAtRef.current = Math.max(greetSeenAtRef.current, g.at)
-      const name = stateRef.current.friends.find((f) => f.id === g.senderId)?.name ?? 'เพื่อน'
-      emitGreetReceived({ emoji: g.emoji, from: name })
-      addNotification({ kind: 'greet', title: `${name} ทักคุณ ${g.emoji}`, body: 'ทักกลับได้จากหน้าก๊วนวิ่ง', goto: 'friends' })
+    if (greetBusyRef.current) {
+      greetAgainRef.current = true
+      return
+    }
+    greetBusyRef.current = true
+    try {
+      do {
+        greetAgainRef.current = false
+        const list = await api.fetchGreetingsFor(greetSeenAtRef.current).catch(() => [])
+        for (const g of list) {
+          greetSeenAtRef.current = Math.max(greetSeenAtRef.current, g.at)
+          if (greetShownRef.current.has(g.id)) continue
+          greetShownRef.current.add(g.id)
+          const name = stateRef.current.friends.find((f) => f.id === g.senderId)?.name ?? 'เพื่อน'
+          emitGreetReceived({ emoji: g.emoji, from: name })
+          addNotification({ kind: 'greet', title: `${name} ทักคุณ ${g.emoji}`, body: 'ทักกลับได้จากหน้าก๊วนวิ่ง', goto: 'friends' })
+        }
+      } while (greetAgainRef.current)
+    } finally {
+      greetBusyRef.current = false
+      // เก็บ id ไว้เท่าที่จำเป็น ไม่ให้โตไปเรื่อย ๆ ตลอดอายุการเปิดแอป
+      if (greetShownRef.current.size > 200) {
+        greetShownRef.current = new Set([...greetShownRef.current].slice(-100))
+      }
     }
   }, [addNotification])
 

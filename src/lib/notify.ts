@@ -25,24 +25,16 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
-/** แจ้งเตือนผ่านระบบถ้าได้รับอนุญาต และแสดง toast ในแอปเสมอ */
+/**
+ * แสดง toast ในแอปพร้อมสั่นเบา ๆ
+ *
+ * ตั้งใจไม่สร้างแจ้งเตือนของระบบจากตรงนี้ เพราะเหตุการณ์ที่ต้องเตือนจริง ๆ
+ * (เพื่อนชวนวิ่ง ตอบคำชวน ทักทาย) เซิร์ฟเวอร์ยิง push มาให้อยู่แล้ว
+ * ถ้าฝั่งแอปเตือนซ้ำอีกที ผู้ใช้จะเห็นเรื่องเดียวกันสองครั้ง
+ */
 export function pushNotice(title: string, body: string): void {
   listeners.forEach((fn) => fn({ title, body }))
-  if (supportsSystemNotification() && Notification.permission === 'granted') {
-    void systemNotify(title, { body, icon: '/icon-192.png', tag: title })
-  }
   vibrate(30)
-}
-
-/** แสดงแจ้งเตือนของระบบ — มือถือ (Android Chrome) แสดงได้ผ่าน service worker เท่านั้น */
-async function systemNotify(title: string, options: NotificationOptions): Promise<void> {
-  try {
-    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
-    if (reg) await reg.showNotification(title, options)
-    else new Notification(title, options)
-  } catch {
-    /* toast ในแอปแสดงไปแล้ว */
-  }
 }
 
 export function vibrate(pattern: number | number[]): void {
