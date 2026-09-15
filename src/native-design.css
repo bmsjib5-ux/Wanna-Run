@@ -143,7 +143,42 @@ body { user-select: text; -webkit-user-select: text; }
 .achievement.earned .achievement-status { color: var(--accent-text); }
 .invite-design-card { overflow: hidden; }
 .invite-cover { height: 120px; margin: -16px -16px 16px; padding: 16px; display: flex; align-items: end; background: linear-gradient(0deg, #133c32a0, #133c3200), url('/hero-run.jpg') center 55% / cover; }
-.invite-cover > span { color: #fff; font-size: 1.5rem; font-weight: 700; }
+.invite-cover > span { color: #fff; font-size: 1.5rem; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+/* รูปที่เจ้าภาพเลือกเอง — ทับภาพมาตรฐาน แต่ยังคงเงาไล่ระดับให้ตัวเลขอ่านออก */
+.invite-cover.has-photo { background-image: linear-gradient(0deg, #00000090, #00000010 60%), var(--banner, none); background-position: center; background-size: cover; }
+
+/* กองรูปเพื่อน: ซ้อนเหลื่อมกันเล็กน้อย คนที่ตอบว่าไปมีขอบเน้น คนที่ไม่ไปจาง */
+.face-pile { display: flex; align-items: center; }
+.face-pile .face { display: inline-flex; border-radius: 999px; }
+.face-pile .face + .face { margin-inline-start: -8px; }
+.face-pile .face .avatar { box-shadow: 0 0 0 2px var(--card); }
+.face-pile .face.going .avatar { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ok, #49cc89); }
+.face-pile .face.out { opacity: .42; }
+.face-pile .face.more {
+  min-width: 28px; height: 28px; margin-inline-start: -8px; padding: 0 6px;
+  align-items: center; justify-content: center;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 11.5px; font-weight: 700; color: var(--muted);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+/* เลือกรูปแบนเนอร์ตอนสร้างคำชวน */
+.banner-pick { display: flex; flex-direction: column; gap: 8px; }
+.banner-preview {
+  position: relative; height: 132px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+.banner-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner-preview .clear {
+  position: absolute; top: 8px; inset-inline-end: 8px;
+  width: 30px; height: 30px; border-radius: 999px; border: 0;
+  background: #000000a8; color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.banner-empty {
+  height: 92px; border-radius: 14px; border: 1px dashed var(--line);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--muted); font-size: 12.5px; background: var(--surface-2);
+}
 .invite-title { display: flex; align-items: center; gap: 8px; font-weight: 700; text-align: start; min-height: 44px; white-space: normal; }
 .invite-design-card .muted svg { display: inline; vertical-align: middle; }
 .welcome-screen { background: linear-gradient(180deg, #06271e30, #06271eaa 70%, #06271eea), url('/hero-run.jpg') center / cover; color: #fff; }

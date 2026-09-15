@@ -113,6 +113,8 @@ type Actions = {
     note: string
     groupId?: ID
     inviteeIds: ID[]
+    /** รูปแบนเนอร์ที่เลือกจากเครื่อง (ไม่บังคับ) */
+    banner?: File
   }) => RunInvite
   replyInvite: (inviteId: ID, reply: InviteReply) => void
   cancelInvite: (inviteId: ID) => void
@@ -726,6 +728,7 @@ export function StoreProvider({
       },
 
       createInvite: (input) => {
+        const { banner, ...fields } = input
         const invite: RunInvite = {
           id: uid('iv_'),
           title: input.title.trim() || 'ชวนวิ่ง',
@@ -744,10 +747,17 @@ export function StoreProvider({
         patch((s) => bumpMetric(s, 'inviteSent', 1))
         if (cloudRef.current) {
           remote(async () => {
-            await api.createInviteRemote({ ...input, title: invite.title, note: invite.note })
+            const id = await api.createInviteRemote({ ...fields, title: invite.title, note: invite.note })
+            // อัปรูปหลังสร้างคำชวนแล้ว ถ้ารูปพลาดก็ยังได้คำชวน ไม่ต้องกรอกใหม่ทั้งหมด
+            if (banner) {
+              await api.uploadInviteBanner(id, banner).catch((err: Error) => {
+                console.error(err)
+                pushNotice('อัปรูปแบนเนอร์ไม่สำเร็จ', 'คำชวนถูกสร้างแล้ว ลองเปลี่ยนรูปใหม่ทีหลังได้')
+              })
+            }
             // เด้งถึงเพื่อนแม้เขาปิดแอปอยู่ — ส่วนคนที่เปิดแอปค้างไว้ realtime จะแจ้งให้เองอยู่แล้ว
             await api.sendPush({
-              to: input.inviteeIds,
+              to: fields.inviteeIds,
               title: `${stateRef.current.profile.name} ชวนคุณไปวิ่ง 📣`,
               body: `${invite.title} · ${invite.place.name} · ${whenLabel(invite.startAt)}`,
               goto: 'invites',

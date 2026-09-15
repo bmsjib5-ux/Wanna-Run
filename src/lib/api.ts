@@ -13,7 +13,7 @@ import type {
   TrackPoint,
 } from '../types'
 import { requireSupabase } from './supabase'
-import { squareThumbnail } from './image'
+import { bannerImage, squareThumbnail } from './image'
 import { simplifyPath } from './geo'
 import { startOfWeek } from './format'
 import { setServerTime } from './presence'
@@ -369,6 +369,7 @@ type InviteRow = {
   group_id: string | null
   status: 'open' | 'cancelled' | 'done'
   created_at: string
+  banner_url: string | null
   invite_replies: Array<{ member: string; reply: InviteReply | null }>
 }
 
@@ -376,7 +377,7 @@ export async function fetchInvites(): Promise<RunInvite[]> {
   const { data, error } = await requireSupabase()
     .from('invites')
     .select(
-      'id,host,title,note,place_name,place_area,lat,lng,start_at,target_km,group_id,status,created_at,invite_replies(member,reply)',
+      'id,host,title,note,place_name,place_area,lat,lng,start_at,target_km,group_id,status,created_at,banner_url,invite_replies(member,reply)',
     )
     .order('start_at', { ascending: true })
   if (error) throw error
@@ -411,6 +412,7 @@ export async function fetchInvites(): Promise<RunInvite[]> {
       replies,
       hostIsMe: row.host === uid,
       hostId: row.host === uid ? undefined : row.host,
+      bannerUrl: row.banner_url ?? undefined,
       myReply,
       createdAt: new Date(row.created_at).getTime(),
       status: row.status,
@@ -426,7 +428,7 @@ export async function createInviteRemote(input: {
   note: string
   groupId?: ID
   inviteeIds: ID[]
-}): Promise<void> {
+}): Promise<ID> {
   const sb = requireSupabase()
   const uid = await currentUserId()
   if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
@@ -454,6 +456,33 @@ export async function createInviteRemote(input: {
   ]
   const { error: rErr } = await sb.from('invite_replies').insert(rows)
   if (rErr) throw rErr
+  return id
+}
+
+const BANNER_BUCKET = 'invite-banners'
+
+/**
+ * ย่อรูปแล้วอัปเป็นแบนเนอร์ของคำชวน คืน URL สาธารณะ
+ * อัปหลังสร้างคำชวนแล้ว ถ้าอัปไม่สำเร็จคำชวนก็ยังอยู่ แค่ไม่มีรูป
+ */
+export async function uploadInviteBanner(inviteId: ID, file: File): Promise<string> {
+  const sb = requireSupabase()
+  const uid = await currentUserId()
+  if (!uid) throw new Error('ยังไม่ได้เข้าสู่ระบบ')
+
+  const image = await bannerImage(file)
+  const path = `${uid}/${inviteId}.jpg`
+  const { error } = await sb.storage
+    .from(BANNER_BUCKET)
+    .upload(path, image, { contentType: 'image/jpeg', upsert: true, cacheControl: '3600' })
+  if (error) throw error
+
+  const { data } = sb.storage.from(BANNER_BUCKET).getPublicUrl(path)
+  // ที่อยู่ไฟล์เหมือนเดิมเมื่อเปลี่ยนรูป จึงต่อเวอร์ชันไว้ให้เบราว์เซอร์โหลดรูปใหม่
+  const url = `${data.publicUrl}?v=${Date.now()}`
+  const { error: uErr } = await sb.from('invites').update({ banner_url: url }).eq('id', inviteId)
+  if (uErr) throw uErr
+  return url
 }
 
 export async function replyInviteRemote(inviteId: ID, reply: InviteReply): Promise<void> {
