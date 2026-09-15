@@ -72,6 +72,8 @@ export type RunInvite = {
   replies: Record<ID, InviteReply>
   hostIsMe: boolean
   hostId?: ID
+  /** รูปแบนเนอร์ที่เจ้าภาพเลือก (ไม่มี = ใช้ภาพพื้นหลังมาตรฐาน) */
+  bannerUrl?: string
   myReply?: InviteReply
   createdAt: number
   status: 'open' | 'cancelled' | 'done'

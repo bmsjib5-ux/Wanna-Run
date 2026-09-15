@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Nav } from '../App'
 import TopBar from '../components/TopBar'
 import Sheet from '../components/Sheet'
@@ -10,6 +10,7 @@ import { useStore } from '../state/store'
 import { fromLocalInput, toLocalInput, whenLabel } from '../lib/format'
 import { PLACES } from '../lib/seed'
 import { directionsUrl } from '../lib/geo'
+import { pushNotice } from '../lib/notify'
 import type { ID, Place, RunInvite } from '../types'
 
 const TARGETS = [3, 5, 10, 15, 21]
@@ -69,7 +70,7 @@ export default function Invites({
             {tab === 'upcoming' ? 'ยังไม่มีนัดวิ่ง สร้างคำชวนใหม่ได้เลย' : 'ยังไม่มีประวัตินัดวิ่ง'}
           </div>
         ) : (
-          list.map((iv) => <InviteCard key={iv.id} invite={iv} friends={state.friends} onOpen={() => setDetail(iv)} />)
+          list.map((iv) => <InviteCard key={iv.id} invite={iv} friends={state.friends} me={state.profile} onOpen={() => setDetail(iv)} />)
         )}
       </div>
 
@@ -202,11 +203,29 @@ function CreateInvite({
   const [note, setNote] = useState('')
   const [groupId, setGroupId] = useState<ID | ''>('')
   const [ids, setIds] = useState<ID[]>([])
+  const [banner, setBanner] = useState<{ file: File; preview: string } | null>(null)
+  const pickFile = useRef<HTMLInputElement>(null)
+  const takePhoto = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
     setWhen(toLocalInput(defaultStart()))
   }, [open])
+
+  // คืนหน่วยความจำของภาพตัวอย่างเมื่อเปลี่ยนรูปหรือปิดแผ่น
+  useEffect(() => () => { if (banner) URL.revokeObjectURL(banner.preview) }, [banner])
+
+  const chooseBanner = (file?: File | null) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      pushNotice('ไฟล์นี้ใช้ไม่ได้', 'เลือกได้เฉพาะไฟล์รูปภาพ')
+      return
+    }
+    setBanner((prev) => {
+      if (prev) URL.revokeObjectURL(prev.preview)
+      return { file, preview: URL.createObjectURL(file) }
+    })
+  }
 
   const pickGroup = (gid: ID | '') => {
     setGroupId(gid)
@@ -225,17 +244,72 @@ function CreateInvite({
       note,
       groupId: groupId || undefined,
       inviteeIds: ids,
+      banner: banner?.file,
     })
     setTitle('')
     setNote('')
     setIds([])
     setGroupId('')
+    setBanner((prev) => {
+      if (prev) URL.revokeObjectURL(prev.preview)
+      return null
+    })
     onClose()
   }
 
   return (
     <>
       <Sheet open={open} title="ชวนเพื่อนวิ่ง" subtitle="เลือกที่ เวลา ระยะ แล้วส่งถึงก๊วนได้เลย" onClose={onClose}>
+        <div className="field">
+          <span>รูปแบนเนอร์ (ไม่บังคับ)</span>
+          <div className="banner-pick">
+            {banner ? (
+              <div className="banner-preview">
+                <img src={banner.preview} alt="ตัวอย่างรูปแบนเนอร์ที่เลือก" />
+                <button
+                  className="clear"
+                  onClick={() => setBanner((prev) => {
+                    if (prev) URL.revokeObjectURL(prev.preview)
+                    return null
+                  })}
+                  aria-label="เอารูปออก"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <div className="banner-empty">
+                <span style={{ fontSize: 22 }}>🖼️</span>
+                ใส่รูปให้คำชวนน่าไปกว่าเดิม
+              </div>
+            )}
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn grow sm" onClick={() => pickFile.current?.click()}>
+                🖼️ เลือกจากเครื่อง
+              </button>
+              <button className="btn grow sm" onClick={() => takePhoto.current?.click()}>
+                📷 ถ่ายรูป
+              </button>
+            </div>
+            {/* สองช่องแยกกัน: ช่องที่มี capture จะเปิดกล้องตรง ๆ บนมือถือ */}
+            <input
+              ref={pickFile}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => { chooseBanner(e.target.files?.[0]); e.target.value = '' }}
+            />
+            <input
+              ref={takePhoto}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={(e) => { chooseBanner(e.target.files?.[0]); e.target.value = '' }}
+            />
+          </div>
+        </div>
+
         <label className="field">
           <span>หัวข้อ</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`ไปวิ่งที่${place.name}กัน`} maxLength={60} />

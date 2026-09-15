@@ -86,6 +86,9 @@ npm run preview  # ลองรันไฟล์ production
 และ [`supabase/greetings.sql`](supabase/greetings.sql) สำหรับทักทายเพื่อนด้วยอิโมจิ
 (ตาราง `greetings` ส่งได้เฉพาะถึงเพื่อนที่รับคำขอแล้ว และจำกัด 10 ครั้ง/นาทีที่ฐานข้อมูล — ถ้ายังไม่รัน ปุ่มทักจะขึ้นว่าส่งไม่สำเร็จ)
 
+และ [`supabase/invite-banners.sql`](supabase/invite-banners.sql) สำหรับรูปแบนเนอร์ของคำชวนวิ่ง
+(คอลัมน์ `banner_url` + ถังไฟล์ `invite-banners` — ถ้ายังไม่รัน คำชวนจะใช้ภาพพื้นหลังมาตรฐานเหมือนเดิม)
+
 > ถ้าเคยรัน `schema.sql` เวอร์ชันแรกไปแล้ว ให้รัน `supabase/fix-invite-recursion.sql`
 > และ `supabase/fix-2-invite-policies.sql` ตามลำดับ เพื่ออัปเดต policy ให้ตรงกับเวอร์ชันล่าสุด
 

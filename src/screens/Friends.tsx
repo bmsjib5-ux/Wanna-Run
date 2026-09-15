@@ -8,6 +8,7 @@ import QrScanner from '../components/QrScanner'
 import { friendLink } from '../lib/friendLink'
 import { isOnline, presenceLabel, useNow } from '../lib/presence'
 import PresenceBadge from '../components/PresenceBadge'
+import NearbyFriends from '../components/NearbyFriends'
 import { useStore } from '../state/store'
 import { paceLabel } from '../lib/geo'
 import { pushNotice } from '../lib/notify'
@@ -167,6 +168,9 @@ export default function Friends({ nav, addCode }: { nav: Nav; addCode?: string }
           </div>
         </>
       )}
+
+      <div className="section-title">ใครอยู่แถวนี้บ้าง</div>
+      <NearbyFriends nav={nav} />
 
       <div className="section-title">
         ก๊วนของคุณ
