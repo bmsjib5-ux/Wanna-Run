@@ -176,7 +176,7 @@ function Shell() {
             }
           />
         )}
-        {route === 'games' && <Games nav={nav} tab={params.tab} />}
+        {route === 'games' && <Games nav={nav} tab={params.tab} game={params.game} />}
         {route === 'profile' && <Profile nav={nav} section={params.section === 'runs' ? 'runs' : undefined} />}
         {route === 'notifications' && <Notifications nav={nav} />}
         {route === 'settings' && <Settings nav={nav} />}
