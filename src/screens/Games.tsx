@@ -21,10 +21,14 @@ const GAMES: Array<{ key: GameKey; emoji: string; name: string; desc: string }> 
   { key: 'quiz', emoji: '🧠', name: 'ควิซคนรักวิ่ง', desc: '5 คำถาม รู้ลึกเรื่องการวิ่ง' },
 ]
 
-export default function Games({ nav, tab: initialTab }: { nav: Nav; tab?: string }) {
+const GAME_KEYS = GAMES.map((g) => g.key)
+
+export default function Games({ nav, tab: initialTab, game }: { nav: Nav; tab?: string; game?: string }) {
   const { state, actions } = useStore()
-  const [tab, setTab] = useState<'missions' | 'games'>(initialTab === 'games' ? 'games' : 'missions')
-  const [playing, setPlaying] = useState<GameKey | null>(null)
+  // เปิดตรงมาจากการ์ดมินิเกมบนหน้าแรก ให้เข้าเกมนั้นเลย ไม่ต้องกดซ้ำอีกที
+  const opening = GAME_KEYS.includes(game as GameKey) ? (game as GameKey) : null
+  const [tab, setTab] = useState<'missions' | 'games'>(initialTab === 'games' || opening ? 'games' : 'missions')
+  const [playing, setPlaying] = useState<GameKey | null>(opening)
 
   const missions = useMemo(() => missionsWithProgress(state), [state])
   const lvl = levelOf(state.profile.xp)

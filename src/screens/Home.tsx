@@ -4,6 +4,7 @@ import type { Nav } from '../App'
 import Avatar from '../components/Avatar'
 import InviteCard from '../components/InviteCard'
 import StreakCard from '../components/StreakCard'
+import HomePlay from '../components/HomePlay'
 import { Button, Card, CardContent } from '../components/ui'
 import { useStore } from '../state/store'
 import { startOfWeek } from '../lib/format'
@@ -53,6 +54,7 @@ export default function Home({ nav }: { nav: Nav }) {
     <div className="section-title">เพื่อนนักวิ่ง<button onClick={() => nav('friends')}>ดูก๊วน <ArrowRight size={15} /></button></div>
     <Card><CardContent>{connected.length ? <div className="friend-preview">{connected.slice(0, 3).map(f => <button key={f.id} onClick={() => nav('friends')}><Avatar emoji={f.emoji} photo={f.avatarUrl} name={f.name} /><span><strong>{f.name}</strong><small>{isOnline(f, now) ? 'ออนไลน์ · พร้อมไปด้วยกัน' : 'เพื่อนร่วมทางของคุณ'}</small></span><span className={isOnline(f, now) ? 'online-dot' : 'offline-dot'} /></button>)}</div> : <div className="friend-empty"><span className="soft-icon"><Users size={25} /></span><div><strong>วิ่งคนเดียวก็ดี มีเพื่อนยิ่งสนุก</strong><p>เพิ่มเพื่อนด้วยรหัสหรือสแกน QR</p></div><Button variant="ghost" size="icon" aria-label="เพิ่มเพื่อน" onClick={() => nav('friends')}><Plus size={22} /></Button></div>}</CardContent></Card>
     <div className="section-title">ก้าวเล็ก ๆ ที่สม่ำเสมอ<button onClick={() => nav('games')}>ภารกิจ <Flag size={18} /></button></div><StreakCard streak={streak} onRun={() => nav('run')} />
+    <HomePlay nav={nav} />
     <Button className="home-start" onClick={() => nav('run')}><Footprints size={20} />ออกไปวิ่งกัน<ArrowRight size={18} /></Button>
     <p className="home-caption">{online.length ? online.length + ' คนในก๊วนกำลังออนไลน์' : 'มากกว่าการวิ่ง คือการได้ไปด้วยกัน'}</p>
   </div>
